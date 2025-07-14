@@ -1,165 +1,210 @@
-# Language Learning Assistant with Phi-3 Mini AI
+# Speech-to-Text React Native App
 
-A comprehensive React Native language learning app powered by Microsoft's Phi-3 Mini AI model, featuring speech-to-text, text-to-speech, and real-time AI chat capabilities.
+A complete React Native application that implements offline speech-to-text functionality using Whisper. The app provides both a demo version with mock transcription and a full implementation ready for whisper.rn integration.
 
 ## 🚀 Features
 
-- **Real AI Chat**: Powered by Phi-3 Mini (4K context) running locally on your device
-- **Speech-to-Text**: Practice speaking in your target language
-- **Text-to-Speech**: Listen to proper pronunciation
-- **Language Learning Modes**: Conversation, Translation, Grammar, and Vocabulary
-- **Offline Support**: AI runs completely offline after initial setup
-- **Multi-language Support**: English, Spanish, French, German, Italian, and more
+- **Offline Speech Recognition**: Uses Whisper for accurate offline transcription
+- **Cross-Platform**: Works on Android, iOS, and Web
+- **Beautiful UI**: Modern, responsive design with loading states
+- **Permission Handling**: Automatic microphone permission requests
+- **Audio Recording**: High-quality audio recording with proper configuration
+- **Transcription History**: Save and view previous transcriptions
+- **Error Handling**: Comprehensive error handling and user feedback
 
-## 📱 AI Model Setup
+## 📱 Screenshots
 
-### Your Phi-3 Mini Model
-Your `Phi-3-mini-4k-instruct-q4.gguf` model is already configured and will auto-initialize on app startup.
+The app features a clean, modern interface with:
+- Recording button with visual feedback
+- Real-time transcription display
+- History management
+- Status indicators for model and permissions
 
-**Model Details:**
-- **Model**: Microsoft Phi-3 Mini 4K Instruct (Quantized)
-- **Size**: ~2.4GB
-- **Context**: 4K tokens
-- **Quantization**: Q4 (optimized for mobile)
-- **Languages**: Multilingual support including major European languages
+## 🛠️ Installation & Setup
 
-## 🎯 Quick Start
+### Prerequisites
 
-1. **Install Dependencies:**
+- Node.js (v16 or higher)
+- npm or yarn
+- Expo CLI (`npm install -g @expo/cli`)
+- Android Studio (for Android development)
+- Xcode (for iOS development, macOS only)
+
+### Quick Start
+
+1. **Clone and install dependencies:**
    ```bash
    npm install
    ```
 
-2. **Start the App:**
+2. **Start the development server:**
    ```bash
-   # For iOS
-   npm run ios
-
-   # For Android  
-   npm run android
-
-   # For development
    npm start
    ```
 
-3. **Check Model Status:**
-   - Go to the **Home** tab to see real-time model status
-   - Visit **Models** tab for detailed diagnostics
-   - The Phi-3 model should auto-initialize on startup
+3. **Run on your preferred platform:**
+   ```bash
+   # Android
+   npm run android
+   
+   # iOS
+   npm run ios
+   
+   # Web
+   npm run web
+   ```
 
-4. **Start Chatting:**
-   - Navigate to **AI Chat** tab
-   - Choose your learning mode (Conversation, Translation, Grammar, Vocabulary)
-   - Start chatting with the AI in your target language!
+## 📁 Project Structure
 
-## 📋 App Structure
+```
+vocalo-ai/
+├── app/
+│   └── (tabs)/
+│       └── index.tsx              # Main screen with SpeechToText
+├── components/
+│   ├── SpeechToText.tsx           # Demo version (mock transcription)
+│   └── WhisperSpeechToText.tsx    # Full whisper.rn implementation
+├── android/                       # Android native configuration
+├── ios/                          # iOS native configuration
+├── package.json                   # Dependencies and scripts
+└── SPEECH_TO_TEXT_SETUP.md       # Detailed setup guide
+```
 
-### Tabs Overview
-- **Home**: App overview and model status
-- **Speech to Text**: Practice speaking with real-time recognition
-- **Text to Speech**: Listen to proper pronunciation
-- **AI Chat**: Real conversations with Phi-3 Mini AI
-- **Models**: Monitor and manage AI models
+## 🔧 Current Implementation
 
-### AI Chat Modes
-1. **Conversation**: Natural dialogue in your target language
-2. **Translation**: Translate between languages with explanations
-3. **Grammar**: Grammar analysis and corrections
-4. **Vocabulary**: Learn new words and phrases
+### Demo Version (`SpeechToText.tsx`)
+- ✅ Audio recording with Expo AV
+- ✅ Microphone permissions
+- ✅ Mock transcription with realistic delays
+- ✅ Beautiful UI with loading states
+- ✅ Transcription history
+- ✅ Error handling
 
-## 🔧 Technical Details
+### Full Whisper Implementation (`WhisperSpeechToText.tsx`)
+- ✅ Real Whisper model integration
+- ✅ Model loading with progress indicators
+- ✅ Actual speech-to-text transcription
+- ✅ Enhanced error handling
+- ✅ Retry mechanisms for model loading
 
-### Model Store
-The app uses MobX for state management with persistent storage:
-- **Model Path**: `model/Phi-3-mini-4k-instruct-q4.gguf`
-- **Context Size**: 2048 tokens (configurable)
-- **Temperature**: 0.7 (balanced creativity/accuracy)
-- **Max Tokens**: 500 per response
+## 🎯 Usage
 
-### Libraries Used
-- **@pocketpalai/llama.rn**: Local LLM inference
-- **expo-router**: Navigation
-- **mobx**: State management
-- **react-native-tts**: Text-to-speech
-- **expo-audio**: Audio recording
+1. **Grant Microphone Permission**: The app will request microphone access on first use
+2. **Wait for Model Loading**: The Whisper model will download and initialize (first time only)
+3. **Start Recording**: Tap the microphone button to begin recording
+4. **Stop Recording**: Tap again to stop and transcribe
+5. **View Results**: See your transcription and history
 
-## 🛠️ Troubleshooting
+## 🔌 Adding Real Whisper Integration
 
-### Model Not Loading
-1. Check **Models** tab for detailed status
-2. Verify model file exists at `model/Phi-3-mini-4k-instruct-q4.gguf`
-3. Try the **Quick Setup** button in Models tab
-4. Restart the app
+To enable the full whisper.rn implementation:
+
+1. **Install whisper.rn:**
+   ```bash
+   npm install whisper.rn
+   ```
+
+2. **Update the main screen:**
+   Replace `SpeechToText` with `WhisperSpeechToText` in `app/(tabs)/index.tsx`:
+
+   ```typescript
+   import WhisperSpeechToText from '../../components/WhisperSpeechToText';
+   
+   // Replace the component usage
+   <WhisperSpeechToText />
+   ```
+
+3. **Configure native modules** (if needed):
+   - Android: Permissions are already configured
+   - iOS: Audio session is handled by Expo AV
+
+## 📋 Permissions
+
+The app automatically handles:
+- **Android**: `RECORD_AUDIO` permission (configured in AndroidManifest.xml)
+- **iOS**: Audio recording permission (handled by Expo AV)
+
+## 🐛 Troubleshooting
 
 ### Common Issues
-- **Permission Errors**: Grant microphone/storage permissions
-- **Memory Issues**: Close other apps before loading the model
-- **Performance**: Reduce context size in model settings if needed
 
-### Debug Commands
-```javascript
-// Check model status
-import { getModelStatus } from './utils/modelSetup';
-console.log(getModelStatus());
+1. **Permission Denied:**
+   - Check device settings for microphone permissions
+   - Restart the app after granting permissions
 
-// Manual setup
-import { quickSetup } from './utils/modelSetup';
-await quickSetup();
-```
-## 📚 Learning Tips
+2. **Model Loading Fails:**
+   - Check internet connection (required for first-time model download)
+   - Ensure sufficient storage space
+   - Use the retry button in the error screen
 
-### Getting Started
-1. **Set Your Level**: Configure your learning level in chat settings
-2. **Choose Languages**: Set your native and target languages
-3. **Start Simple**: Begin with conversation mode
-4. **Practice Regularly**: Use all features for comprehensive learning
+3. **Recording Issues:**
+   - Ensure microphone isn't being used by another app
+   - Check audio mode configuration
+   - Test on physical device (simulator has limited audio support)
 
-### Best Practices
-- **Grammar Mode**: Paste text for detailed analysis
-- **Vocabulary Mode**: Ask about specific words or phrases
-- **Translation Mode**: Request explanations for complex translations
-- **Conversation Mode**: Practice real-world scenarios
+4. **Build Errors:**
+   ```bash
+   # Clear cache
+   npm run cache:clear
+   
+   # Reset project
+   npm run reset-project
+   ```
 
-## 🔒 Privacy & Security
+### Development Tips
 
-- **Fully Offline**: AI runs locally, no data sent to servers
-- **No Telemetry**: Your conversations stay on your device
-- **Open Source**: Transparent and auditable code
-- **Secure**: No external API keys or cloud dependencies
+- Test on physical devices for best audio results
+- Monitor console logs for detailed error information
+- Use Expo DevTools for debugging
+- The demo version works immediately without additional setup
 
-## 📈 Performance
+## 🚀 Next Steps
 
-### System Requirements
-- **RAM**: 4GB+ recommended (3GB minimum)
-- **Storage**: 3GB free space
-- **CPU**: ARM64 processor recommended
-- **OS**: iOS 13+ or Android 8+
+1. **Enhanced Features:**
+   - Language selection for transcription
+   - Real-time transcription streaming
+   - Audio playback of recordings
+   - Export transcriptions to files
 
-### Optimization Tips
-- Close background apps when using AI chat
-- Use conversation mode for best performance
-- Reduce context size if experiencing slowdowns
-- Release model when not actively using
+2. **Performance Optimization:**
+   - Model caching and optimization
+   - Background processing
+   - Memory management for large audio files
 
-## 🤝 Contributing
+3. **Advanced Features:**
+   - Multiple language support
+   - Custom vocabulary training
+   - Integration with other AI services
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+## 📦 Dependencies
+
+### Core Dependencies
+- `expo-av`: Audio recording and playback
+- `expo-router`: Navigation
+- `react-native`: Core framework
+- `expo`: Development platform
+
+### For Full Whisper Integration
+- `whisper.rn`: Offline speech recognition
+- `react-native-audio-recorder-player`: Advanced audio handling
+- `react-native-permissions`: Permission management
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is open source and available under the MIT License.
 
-## 🙏 Acknowledgments
+## 🤝 Contributing
 
-- **Microsoft**: For the amazing Phi-3 Mini model
-- **PocketPal AI**: For the React Native LLM integration
-- **Expo Team**: For the excellent development platform
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📞 Support
+
+For issues and questions:
+1. Check the troubleshooting section
+2. Review the detailed setup guide in `SPEECH_TO_TEXT_SETUP.md`
+3. Open an issue on the repository
 
 ---
 
-**Ready to start your language learning journey with AI? Launch the app and head to the AI Chat tab!** 🎉
+**Ready to start transcribing? Run `npm start` and begin recording!** 🎤
 
