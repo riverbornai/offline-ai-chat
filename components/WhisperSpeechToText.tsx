@@ -1,4 +1,5 @@
 import { Audio } from 'expo-av';
+import * as DocumentPicker from 'expo-document-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +14,8 @@ import {
 import { WHISPER_CONFIG } from '../config/whisperConfig';
 import { WhisperResult, whisperService } from '../services/whisperService';
 
+type TabType = 'recorder' | 'upload';
+
 const WhisperSpeechToText: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -23,6 +26,7 @@ const WhisperSpeechToText: React.FC = () => {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelProgress, setModelProgress] = useState(0);
   const [modelPath, setModelPath] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('recorder');
 
   const recording = useRef<Audio.Recording | null>(null);
 
@@ -59,7 +63,7 @@ const WhisperSpeechToText: React.FC = () => {
       setIsModelLoading(true);
       setModelProgress(0);
       
-      // Initialize custom Whisper service
+      // Initialize Whisper service
       await whisperService.initialize();
       
       setModelLoaded(true);
@@ -70,7 +74,7 @@ const WhisperSpeechToText: React.FC = () => {
       console.error('Error initializing Whisper:', error);
       Alert.alert(
         'Whisper Initialization Error', 
-        'Failed to initialize Whisper model. Please check your internet connection and try again.'
+        'Failed to initialize Whisper. Please ensure whisper.rn is properly installed and configured.'
       );
     } finally {
       setIsModelLoading(false);
@@ -173,7 +177,7 @@ const WhisperSpeechToText: React.FC = () => {
     try {
       setIsTranscribing(true);
       
-      // Transcribe audio using custom Whisper service
+      // Transcribe audio using Whisper service
       const result: WhisperResult = await whisperService.transcribe(audioPath);
       
       if (result && result.text) {
@@ -185,9 +189,11 @@ const WhisperSpeechToText: React.FC = () => {
       }
     } catch (error) {
       console.error('Error transcribing audio:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
       Alert.alert(
         'Transcription Error', 
-        'Failed to transcribe audio. Please try again with a clearer recording.'
+        `Failed to transcribe audio: ${errorMessage}`
       );
       setTranscription('Transcription failed');
     } finally {
@@ -204,12 +210,31 @@ const WhisperSpeechToText: React.FC = () => {
     setupWhisper();
   };
 
+  const pickAndUploadAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const audioFile = result.assets[0];
+        console.log('Selected audio file:', audioFile);
+        
+        await transcribeAudio(audioFile.uri);
+      }
+    } catch (error) {
+      console.error('Error picking audio file:', error);
+      Alert.alert('Error', 'Failed to pick audio file');
+    }
+  };
+
   if (isModelLoading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading Custom Whisper Model...</Text>
+          <Text style={styles.loadingText}>Loading Whisper Model...</Text>
           <Text style={styles.loadingSubtext}>
             Initializing {WHISPER_CONFIG.modelName}
           </Text>
@@ -230,7 +255,7 @@ const WhisperSpeechToText: React.FC = () => {
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>Model Loading Failed</Text>
           <Text style={styles.errorText}>
-            Unable to load the Whisper model. This could be due to network issues or insufficient storage.
+            Unable to load the Whisper model. Please ensure whisper.rn is properly installed and configured.
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={retryModelLoad}>
             <Text style={styles.retryButtonText}>Retry</Text>
@@ -244,34 +269,91 @@ const WhisperSpeechToText: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Speech to Text</Text>
-        <Text style={styles.subtitle}>Custom Whisper Model</Text>
+        <Text style={styles.subtitle}>Whisper Model</Text>
         <View style={styles.statusBadge}>
           <Text style={styles.statusText}>Model: {WHISPER_CONFIG.modelName} ✓</Text>
+        </View>
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusText}>Status: Ready</Text>
         </View>
         {modelPath && (
           <Text style={styles.modelPathText}>Path: {modelPath}</Text>
         )}
       </View>
 
-      <View style={styles.controlsContainer}>
+      {/* Tab Buttons */}
+      <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[
-            styles.recordButton,
-            isRecording && styles.recordingButton,
-            isTranscribing && styles.disabledButton,
+            styles.tabButton,
+            activeTab === 'recorder' ? styles.activeTab : styles.inactiveTab
           ]}
-          onPress={isRecording ? stopRecording : startRecording}
-          disabled={isTranscribing}
+          onPress={() => setActiveTab('recorder')}
         >
-          <Text style={styles.recordButtonText}>
-            {isRecording ? '🛑 Stop Recording' : '🎤 Start Recording'}
+          <Text style={[
+            styles.tabText,
+            activeTab === 'recorder' ? styles.activeTabText : styles.inactiveTabText
+          ]}>
+            🎤 Recorder
           </Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'upload' ? styles.activeTab : styles.inactiveTab
+          ]}
+          onPress={() => setActiveTab('upload')}
+        >
+          <Text style={[
+            styles.tabText,
+            activeTab === 'upload' ? styles.activeTabText : styles.inactiveTabText
+          ]}>
+            📁 Upload
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tab Content */}
+      <View style={styles.controlsContainer}>
+        {activeTab === 'recorder' ? (
+          <>
+            <TouchableOpacity
+              style={[
+                styles.recordButton,
+                isRecording && styles.recordingButton,
+                isTranscribing && styles.disabledButton,
+              ]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={isTranscribing}
+            >
+              <Text style={styles.recordButtonText}>
+                {isRecording ? '🛑 Stop Recording' : '🎤 Start Recording'}
+              </Text>
+            </TouchableOpacity>
+
+            {isRecording && (
+              <View style={styles.recordingIndicator}>
+                <Text style={styles.recordingText}>🔴 Recording in progress...</Text>
+              </View>
+            )}
+          </>
+        ) : (
+          <TouchableOpacity
+            style={[styles.uploadButton, isTranscribing && styles.disabledButton]}
+            onPress={pickAndUploadAudio}
+            disabled={isTranscribing}
+          >
+            <Text style={styles.uploadButtonText}>
+              📁 Upload Audio File
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {isTranscribing && (
           <View style={styles.transcribingContainer}>
             <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.transcribingText}>Transcribing with custom model...</Text>
+            <Text style={styles.transcribingText}>Transcribing...</Text>
           </View>
         )}
 
@@ -420,6 +502,39 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
   },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 24,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: '#3b82f6',
+    boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
+    elevation: 4,
+  },
+  inactiveTab: {
+    backgroundColor: 'transparent',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  activeTabText: {
+    color: 'white',
+  },
+  inactiveTabText: {
+    color: '#64748b',
+  },
   controlsContainer: {
     alignItems: 'center',
     marginBottom: 30,
@@ -446,6 +561,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
   },
   recordButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  recordingIndicator: {
+    marginTop: 16,
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  recordingText: {
+    fontSize: 14,
+    color: '#dc2626',
+    fontWeight: '500',
+  },
+  uploadButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+    minHeight: 64,
+    justifyContent: 'center',
+    boxShadow: '0 4px 24px rgba(16, 185, 129, 0.25)',
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  uploadButtonText: {
     color: 'white',
     fontSize: 18,
     fontWeight: '600',

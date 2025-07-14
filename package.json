@@ -13,7 +13,8 @@
     "cache:clear": "node ./scripts/cache-cli.js clear-all",
     "cache:clear-models": "node ./scripts/cache-cli.js clear-models",
     "cache:clear-downloads": "node ./scripts/cache-cli.js clear-downloads",
-    "setup": "node ./scripts/setup-speech-to-text.js"
+    "setup": "node ./scripts/setup-speech-to-text.js",
+    "setup-model": "node ./scripts/setup-model.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -24,7 +25,7 @@
     "@react-navigation/native": "^7.1.6",
     "axios": "^1.8.2",
     "chat-formatter": "^0.3.4",
-    "expo": "^53.0.18",
+    "expo": "53.0.19",
     "expo-asset": "^11.1.7",
     "expo-audio": "^0.4.8",
     "expo-av": "~15.1.7",

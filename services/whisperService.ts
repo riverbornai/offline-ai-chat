@@ -1,5 +1,22 @@
+import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
+
+// Import whisper.rn - this will throw if not available
+let initWhisper: any = null;
+let WhisperContext: any = null;
+let isWhisperAvailable = false;
+
+try {
+  const whisperModule = require('whisper.rn');
+  initWhisper = whisperModule.initWhisper;
+  WhisperContext = whisperModule.WhisperContext;
+  isWhisperAvailable = true;
+  console.log('whisper.rn loaded successfully');
+} catch (error) {
+  console.error('whisper.rn not available:', error);
+  isWhisperAvailable = false;
+}
 
 export interface WhisperResult {
   text: string;
@@ -20,11 +37,15 @@ class WhisperService {
     try {
       console.log('Initializing Whisper service...');
       
-      // Check if model exists in assets
+      if (!isWhisperAvailable || !initWhisper) {
+        throw new Error('whisper.rn native module is not available. Please install whisper.rn for real transcription.');
+      }
+      
+      // Check if model exists in assets first, then in documents directory
       const modelExists = await this.checkModelExists();
       
       if (!modelExists) {
-        console.log('Model not found in assets, downloading...');
+        console.log('Model not found, downloading...');
         await this.downloadModel();
       }
       
@@ -42,10 +63,36 @@ class WhisperService {
 
   private async checkModelExists(): Promise<boolean> {
     try {
-      const modelPath = `${FileSystem.documentDirectory}models/${WHISPER_CONFIG.modelName}`;
-      const info = await FileSystem.getInfoAsync(modelPath);
-      this.modelPath = modelPath;
-      return info.exists;
+      // First check if model exists in assets
+      console.log('Checking for model in assets...');
+      
+      try {
+        // Try to load the asset using Asset.fromModule
+        // This will work if the model is properly bundled in the assets folder
+        const assetModule = require('../assets/models/ggml-tiny.en-q5_1.bin');
+        const asset = Asset.fromModule(assetModule);
+        await asset.downloadAsync();
+        
+        if (asset.localUri) {
+          this.modelPath = asset.localUri;
+          console.log('Model found in assets:', asset.localUri);
+          return true;
+        }
+      } catch (assetError) {
+        console.log('Model not found in assets, checking documents directory...');
+      }
+      
+      // Check documents directory as fallback
+      const documentsModelPath = `${FileSystem.documentDirectory}models/${WHISPER_CONFIG.modelName}`;
+      const documentsInfo = await FileSystem.getInfoAsync(documentsModelPath);
+      if (documentsInfo.exists) {
+        this.modelPath = documentsModelPath;
+        console.log('Model found in documents directory:', documentsModelPath);
+        return true;
+      }
+      
+      console.log('Model not found in either location');
+      return false;
     } catch (error) {
       console.error('Error checking model existence:', error);
       return false;
@@ -56,7 +103,7 @@ class WhisperService {
     try {
       console.log('Downloading model from:', WHISPER_CONFIG.modelUrl);
       
-      // Create models directory
+      // Create models directory in documents
       const modelsDir = `${FileSystem.documentDirectory}models/`;
       await FileSystem.makeDirectoryAsync(modelsDir, { intermediates: true });
       
@@ -74,7 +121,7 @@ class WhisperService {
       const result = await downloadResumable.downloadAsync();
       if (result?.status === 200) {
         this.modelPath = result.uri;
-        console.log('Model downloaded successfully');
+        console.log('Model downloaded successfully to:', result.uri);
       } else {
         throw new Error('Failed to download model');
       }
@@ -87,60 +134,70 @@ class WhisperService {
 
   private async loadModel(): Promise<void> {
     try {
-      // For now, we'll use a mock implementation since whisper.rn API might be different
-      // In a real implementation, you would initialize the actual Whisper context here
-      console.log('Loading model from:', this.modelPath);
+      console.log('Loading Whisper model from:', this.modelPath);
       
-      // Simulate model loading
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      this.context = {
-        transcribe: this.mockTranscribe.bind(this)
-      };
+      if (!isWhisperAvailable || !initWhisper) {
+        throw new Error('whisper.rn native module is not available');
+      }
+
+      if (!this.modelPath) {
+        throw new Error('Model path not set');
+      }
+
+      // Initialize WhisperContext using the correct initWhisper function
+      this.context = await initWhisper({
+        filePath: this.modelPath,
+        isBundleAsset: false, // Set to true if using bundled assets
+      });
+
+      console.log('Whisper context created successfully');
       
     } catch (error) {
-      console.error('Error loading model:', error);
+      console.error('Error loading Whisper model:', error);
       throw error;
     }
   }
 
-  private async mockTranscribe(audioPath: string): Promise<WhisperResult> {
-    // Mock transcription for demonstration
-    // In real implementation, this would use the actual Whisper model
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const mockResults = [
-      "Hello, this is a test transcription using the custom model.",
-      "The weather is beautiful today and I'm testing the speech recognition.",
-      "This is a demonstration of the custom Whisper model integration.",
-      "Thank you for using our speech to text application.",
-      "The custom model is working perfectly for transcription."
-    ];
-    
-    const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
-    
-    return {
-      text: randomResult,
-      language: 'en',
-      segments: [{
-        start: 0,
-        end: 5,
-        text: randomResult
-      }]
-    };
-  }
-
   async transcribe(audioPath: string): Promise<WhisperResult> {
-    if (!this.modelLoaded || !this.context) {
+    if (!this.modelLoaded) {
       throw new Error('Whisper model not loaded');
     }
 
+    if (!isWhisperAvailable || !this.context) {
+      throw new Error('whisper.rn native module is not available');
+    }
+
     try {
-      console.log('Transcribing audio:', audioPath);
-      const result = await this.context.transcribe(audioPath);
-      return result;
+      console.log('Transcribing with real Whisper:', audioPath);
+      
+      // Use the real WhisperContext to transcribe
+      const transcribeResult = this.context.transcribe(audioPath, {
+        language: WHISPER_CONFIG.language,
+        temperature: 0.0,
+        bestOf: 1,
+        beamSize: 5,
+        patience: 1.0,
+        lengthPenalty: 1.0,
+        suppressTokens: [-1],
+        suppressBlank: true,
+        temperatureInc: 0.2,
+        entropyThreshold: 2.4,
+        logprobThreshold: -1.0,
+        noSpeechThreshold: 0.6,
+      });
+
+      // Wait for the transcription to complete
+      const result = await transcribeResult.promise;
+
+      console.log('Transcription result:', result);
+      
+      return {
+        text: result.text || '',
+        language: result.language || WHISPER_CONFIG.language,
+        segments: result.segments || [],
+      };
     } catch (error) {
-      console.error('Transcription error:', error);
+      console.error('Whisper transcription error:', error);
       throw error;
     }
   }
@@ -149,17 +206,22 @@ class WhisperService {
     return this.modelLoaded;
   }
 
+  isWhisperAvailable(): boolean {
+    return isWhisperAvailable;
+  }
+
   getModelPath(): string | null {
     return this.modelPath;
   }
 
   async cleanup(): Promise<void> {
     try {
-      if (this.context) {
-        // Cleanup context if needed
-        this.context = null;
+      if (this.context && this.context.release) {
+        await this.context.release();
       }
+      this.context = null;
       this.modelLoaded = false;
+      console.log('Whisper context cleaned up');
     } catch (error) {
       console.error('Error during cleanup:', error);
     }
