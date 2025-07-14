@@ -1,10 +1,8 @@
-import { Audio } from 'expo-av';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  PermissionsAndroid,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AudioRecord from 'react-native-audio-record';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
 import { WhisperResult, whisperService } from '../services/whisperService';
 
@@ -29,14 +28,14 @@ const WhisperSpeechToText: React.FC = () => {
   const [modelPath, setModelPath] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('recorder');
 
-  const recording = useRef<Audio.Recording | null>(null);
+  const recording = useRef<boolean>(false);
 
   useEffect(() => {
     setupAudio();
     setupWhisper();
     return () => {
       if (recording.current) {
-        recording.current.stopAndUnloadAsync();
+        AudioRecord.stop();
       }
       whisperService.cleanup();
     };
@@ -44,16 +43,19 @@ const WhisperSpeechToText: React.FC = () => {
 
   const setupAudio = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
+      // Initialize AudioRecord with minimal settings for maximum compatibility
+      const options = {
+        sampleRate: 16000,
+        channels: 1,
+        bitsPerSample: 16,
+        wavFile: 'recording.wav',
+      };
       
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+      console.log('Initializing AudioRecord with minimal options:', options);
+      AudioRecord.init(options);
+      
+      // Request permissions
+      await requestPermissions();
     } catch (error) {
       console.error('Error setting up audio:', error);
     }
@@ -83,13 +85,30 @@ const WhisperSpeechToText: React.FC = () => {
   };
 
   const requestPermissions = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      setHasPermission(status === 'granted');
-      return status === 'granted';
-    } catch (error) {
-      console.error('Error requesting permissions:', error);
-      return false;
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          {
+            title: 'Microphone Permission',
+            message: 'This app needs access to your microphone to record audio.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        
+        setHasPermission(granted === PermissionsAndroid.RESULTS.GRANTED);
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.error('Error requesting microphone permission:', err);
+        setHasPermission(false);
+        return false;
+      }
+    } else {
+      // iOS permissions are handled differently, usually through Info.plist
+      setHasPermission(true);
+      return true;
     }
   };
 
@@ -111,39 +130,18 @@ const WhisperSpeechToText: React.FC = () => {
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording: newRecording } = await Audio.Recording.createAsync({
-        android: {
-          extension: '.wav',
-          outputFormat: Audio.AndroidOutputFormat.DEFAULT, // or try .WAV if available
-          audioEncoder: Audio.AndroidAudioEncoder.DEFAULT,
-          sampleRate: 16000,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: '.wav',
-          outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-          audioQuality: Audio.IOSAudioQuality.HIGH,
-          sampleRate: 16000,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: 128000,
-        },
-      });
-
-      recording.current = newRecording;
+      console.log('Starting recording...');
+      await AudioRecord.start();
+      recording.current = true;
       setIsRecording(true);
+      console.log('Recording started successfully');
+      
+      // Show a message to speak
+      Alert.alert(
+        'Recording Started', 
+        'Please speak clearly into the microphone. Tap "Stop Recording" when done.',
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       console.error('Error starting recording:', error);
       Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
@@ -153,21 +151,30 @@ const WhisperSpeechToText: React.FC = () => {
   const stopRecording = async () => {
     try {
       if (!recording.current) return;
-      await recording.current.stopAndUnloadAsync();
-      const uri = recording.current.getURI();
+      
+      console.log('Stopping recording...');
+      const audioFile = await AudioRecord.stop();
+      recording.current = false;
       setIsRecording(false);
 
-      if (uri) {
-        const info = await FileSystem.getInfoAsync(uri);
-        console.log('Recorded file info:', info);
-
-        await transcribeAudio(uri);
+      if (audioFile) {
+        console.log('Recording stopped. File saved at:', audioFile);
+        console.log('File path type:', typeof audioFile);
+        console.log('File path length:', audioFile.length);
+        
+        // Add a small delay to ensure file is fully written
+        setTimeout(async () => {
+          await transcribeAudio(audioFile);
+        }, 1000);
+      } else {
+        console.error('No audio file path returned');
+        Alert.alert('Recording Error', 'No audio file was created.');
       }
     } catch (error) {
       console.error('Error stopping recording:', error);
       setIsRecording(false);
     } finally {
-      recording.current = null;
+      recording.current = false;
     }
   };
 
@@ -179,15 +186,20 @@ const WhisperSpeechToText: React.FC = () => {
 
     try {
       setIsTranscribing(true);
+      console.log('Starting transcription for:', audioPath);
       
       // Transcribe audio using Whisper service
       const result: WhisperResult = await whisperService.transcribe(audioPath);
       
+      console.log('Transcription result:', result);
+      
       if (result && result.text) {
         const transcribedText = result.text.trim();
+        console.log('Transcribed text:', transcribedText);
         setTranscription(transcribedText);
         setTranscriptionHistory(prev => [...prev, transcribedText]);
       } else {
+        console.log('No text in result, setting "No speech detected"');
         setTranscription('No speech detected');
       }
     } catch (error) {
@@ -211,25 +223,6 @@ const WhisperSpeechToText: React.FC = () => {
 
   const retryModelLoad = () => {
     setupWhisper();
-  };
-
-  const pickAndUploadAudio = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['audio/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const audioFile = result.assets[0];
-        console.log('Selected audio file:', audioFile);
-        
-        await transcribeAudio(audioFile.uri);
-      }
-    } catch (error) {
-      console.error('Error picking audio file:', error);
-      Alert.alert('Error', 'Failed to pick audio file');
-    }
   };
 
   if (isModelLoading) {
@@ -284,73 +277,26 @@ const WhisperSpeechToText: React.FC = () => {
         )}
       </View>
 
-      {/* Tab Buttons */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'recorder' ? styles.activeTab : styles.inactiveTab
-          ]}
-          onPress={() => setActiveTab('recorder')}
-        >
-          <Text style={[
-            styles.tabText,
-            activeTab === 'recorder' ? styles.activeTabText : styles.inactiveTabText
-          ]}>
-            🎤 Recorder
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'upload' ? styles.activeTab : styles.inactiveTab
-          ]}
-          onPress={() => setActiveTab('upload')}
-        >
-          <Text style={[
-            styles.tabText,
-            activeTab === 'upload' ? styles.activeTabText : styles.inactiveTabText
-          ]}>
-            📁 Upload
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tab Content */}
+      {/* Controls - Only Recorder */}
       <View style={styles.controlsContainer}>
-        {activeTab === 'recorder' ? (
-          <>
-            <TouchableOpacity
-              style={[
-                styles.recordButton,
-                isRecording && styles.recordingButton,
-                isTranscribing && styles.disabledButton,
-              ]}
-              onPress={isRecording ? stopRecording : startRecording}
-              disabled={isTranscribing}
-            >
-              <Text style={styles.recordButtonText}>
-                {isRecording ? '🛑 Stop Recording' : '🎤 Start Recording'}
-              </Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.recordButton,
+            isRecording && styles.recordingButton,
+            isTranscribing && styles.disabledButton,
+          ]}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={isTranscribing}
+        >
+          <Text style={styles.recordButtonText}>
+            {isRecording ? '🛑 Stop Recording' : '🎤 Start Recording'}
+          </Text>
+        </TouchableOpacity>
 
-            {isRecording && (
-              <View style={styles.recordingIndicator}>
-                <Text style={styles.recordingText}>🔴 Recording in progress...</Text>
-              </View>
-            )}
-          </>
-        ) : (
-          <TouchableOpacity
-            style={[styles.uploadButton, isTranscribing && styles.disabledButton]}
-            onPress={pickAndUploadAudio}
-            disabled={isTranscribing}
-          >
-            <Text style={styles.uploadButtonText}>
-              📁 Upload Audio File
-            </Text>
-          </TouchableOpacity>
+        {isRecording && (
+          <View style={styles.recordingIndicator}>
+            <Text style={styles.recordingText}>🔴 Recording in progress...</Text>
+          </View>
         )}
 
         {isTranscribing && (
