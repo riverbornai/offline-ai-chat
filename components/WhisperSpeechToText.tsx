@@ -1,15 +1,16 @@
 import { Audio } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
 import { WhisperResult, whisperService } from '../services/whisperService';
@@ -117,16 +118,16 @@ const WhisperSpeechToText: React.FC = () => {
 
       const { recording: newRecording } = await Audio.Recording.createAsync({
         android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          extension: '.wav',
+          outputFormat: Audio.AndroidOutputFormat.DEFAULT, // or try .WAV if available
+          audioEncoder: Audio.AndroidAudioEncoder.DEFAULT,
           sampleRate: 16000,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
-          extension: '.m4a',
-          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+          extension: '.wav',
+          outputFormat: Audio.IOSOutputFormat.LINEARPCM,
           audioQuality: Audio.IOSAudioQuality.HIGH,
           sampleRate: 16000,
           numberOfChannels: 1,
@@ -152,12 +153,14 @@ const WhisperSpeechToText: React.FC = () => {
   const stopRecording = async () => {
     try {
       if (!recording.current) return;
-
       await recording.current.stopAndUnloadAsync();
       const uri = recording.current.getURI();
       setIsRecording(false);
 
       if (uri) {
+        const info = await FileSystem.getInfoAsync(uri);
+        console.log('Recorded file info:', info);
+
         await transcribeAudio(uri);
       }
     } catch (error) {
