@@ -2,9 +2,9 @@
 // The actual WhisperService implementation is in services/whisperService.ts
 
 export const WHISPER_CONFIG = {
-  modelName: 'ggml-tiny.en-q5_1.bin',
-  modelPath: 'assets/models/ggml-tiny.en-q5_1.bin',
-  modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin',
+  modelName: 'ggml-base-q5_1.bin',
+  modelPath: 'assets/models/ggml-base-q5_1.bin',
+  modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin',
   modelSize: 'tiny',
   language: 'en',
   quantization: 'q5_1'

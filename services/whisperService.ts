@@ -69,7 +69,7 @@ class WhisperService {
       try {
         // Try to load the asset using Asset.fromModule
         // This will work if the model is properly bundled in the assets folder
-        const assetModule = require('../assets/models/ggml-tiny.en-q5_1.bin');
+        const assetModule = require('../assets/models/ggml-base-q5_1.bin');
         const asset = Asset.fromModule(assetModule);
         await asset.downloadAsync();
         
