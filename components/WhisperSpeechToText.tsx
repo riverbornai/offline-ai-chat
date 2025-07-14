@@ -193,9 +193,12 @@ const WhisperSpeechToText: React.FC = () => {
       
       console.log('Transcription result:', result);
       
-      if (result && result.text) {
-        const transcribedText = result.text.trim();
-        console.log('Transcribed text:', transcribedText);
+      let transcribedText = result.text && result.text.trim();
+      if (!transcribedText && Array.isArray(result.segments) && result.segments.length > 0) {
+        transcribedText = result.segments.map(seg => seg.text).join(' ').trim();
+        console.log('Aggregated text from segments:', transcribedText);
+      }
+      if (transcribedText) {
         setTranscription(transcribedText);
         setTranscriptionHistory(prev => [...prev, transcribedText]);
       } else {
