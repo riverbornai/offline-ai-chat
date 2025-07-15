@@ -2,79 +2,19 @@ import React from 'react';
 import {
     StyleSheet,
     Text,
-    TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { ChatSession } from '../stores/ChatSessionStore';
-import { LanguageLearningPromptType } from '../utils/chat';
 
 interface ChatHeaderProps {
   session?: ChatSession;
-  onSettingsPress: () => void;
-  onTypeChange: (type: LanguageLearningPromptType) => void;
-  currentType: LanguageLearningPromptType;
   colors: any;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   session,
-  onSettingsPress,
-  onTypeChange,
-  currentType,
   colors,
 }) => {
-  const getTypeDisplayName = (type: LanguageLearningPromptType) => {
-    switch (type) {
-      case 'conversation':
-        return 'Conversation';
-      case 'translation':
-        return 'Translation';
-      case 'grammar':
-        return 'Grammar';
-      case 'vocabulary':
-        return 'Vocabulary';
-      case 'pronunciation':
-        return 'Pronunciation';
-      case 'cultural':
-        return 'Cultural';
-      case 'roleplay':
-        return 'Roleplay';
-      default:
-        return 'Chat';
-    }
-  };
-
-  const getTypeIcon = (type: LanguageLearningPromptType) => {
-    switch (type) {
-      case 'conversation':
-        return '💬';
-      case 'translation':
-        return '🔄';
-      case 'grammar':
-        return '📝';
-      case 'vocabulary':
-        return '📖';
-      case 'pronunciation':
-        return '🗣️';
-      case 'cultural':
-        return '🌍';
-      case 'roleplay':
-        return '🎭';
-      default:
-        return '💬';
-    }
-  };
-
-  const learningTypes: LanguageLearningPromptType[] = [
-    'conversation',
-    'translation',
-    'grammar',
-    'vocabulary',
-    'pronunciation',
-    'cultural',
-    'roleplay',
-  ];
-
   return (
     <View style={[styles.container, { backgroundColor: colors.surface }]}>
       <View style={styles.headerRow}>
@@ -83,44 +23,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             {session?.title || 'New Chat'}
           </Text>
           <Text style={[styles.subtitle, { color: colors.muted }]}>
-            {session ? `${session.targetLanguage} • ${session.nativeLanguage}` : 'Language Learning'}
+            {session ? `${session.targetLanguage} • ${session.nativeLanguage}` : 'AI Conversation'}
           </Text>
         </View>
-        
-        <TouchableOpacity
-          style={[styles.settingsButton, { backgroundColor: colors.background }]}
-          onPress={onSettingsPress}
-        >
-          <Text style={styles.settingsIcon}>⚙️</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.typesContainer}>
-        {learningTypes.map((type) => (
-          <TouchableOpacity
-            key={type}
-            style={[
-              styles.typeButton,
-              {
-                backgroundColor: currentType === type ? colors.primary : colors.background,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => onTypeChange(type)}
-          >
-            <Text style={styles.typeIcon}>{getTypeIcon(type)}</Text>
-            <Text
-              style={[
-                styles.typeText,
-                {
-                  color: currentType === type ? colors.surface : colors.text,
-                },
-              ]}
-            >
-              {getTypeDisplayName(type)}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
     </View>
   );
