@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import AudioRecorder from '../../components/AudioRecorder';
+import WhisperSpeechToText from '../../components/WhisperSpeechToText';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 
@@ -26,8 +26,8 @@ export default function HomeScreen() {
         </View>
 
         
-        {/* Audio Recorder Section */}
-        <AudioRecorder />
+        {/* Speech to Text Section */}
+        <WhisperSpeechToText />
 
         {/* Bottom Spacing */}
         <View style={styles.bottomSpacing} />

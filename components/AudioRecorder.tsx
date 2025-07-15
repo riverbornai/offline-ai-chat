@@ -1,444 +1,288 @@
-import { Audio } from 'expo-av';
-import * as DocumentPicker from 'expo-document-picker';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SpeechService, TranscriptionResponse } from '../services/speechService';
+import {
+    Alert,
+    PermissionsAndroid,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import AudioRecord from 'react-native-audio-record';
 
-type TabType = 'recorder' | 'upload';
-
-export default function AudioRecorder() {
-  const [recording, setRecording] = useState<Audio.Recording>();
+const AudioRecorder: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [transcriptions, setTranscriptions] = useState<string[]>([]);
-  const [permissionResponse, requestPermission] = Audio.usePermissions();
-  const [activeTab, setActiveTab] = useState<TabType>('recorder');
+  const [recordingPath, setRecordingPath] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
+    setupAudioRecorder();
+    requestMicrophonePermission();
+    
     return () => {
-      // Clean up recording if component unmounts while recording
-      if (recording) {
-        recording.stopAndUnloadAsync().catch(() => {
-          // Ignore errors if recording is already unloaded
-        });
+      // Cleanup on unmount
+      if (isRecording) {
+        AudioRecord.stop();
       }
     };
-  }, [recording]);
+  }, []);
 
-  async function startRecording() {
-    try {
-      if (permissionResponse?.status !== 'granted') {
-        console.log('Requesting permission..');
-        await requestPermission();
-      }
+  const setupAudioRecorder = () => {
+    const options = {
+      sampleRate: 16000,
+      channels: 1,
+      bitsPerSample: 16,
+      wavFile: 'recording.wav',
+    };
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+    AudioRecord.init(options);
+  };
 
-      console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync({
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
-          sampleRate: 16000,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: '.m4a',
-          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-          audioQuality: Audio.IOSAudioQuality.HIGH,
-          sampleRate: 16000,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: 128000,
-        },
-      });
-
-      setRecording(recording);
-      setIsRecording(true);
-      console.log('Recording started');
-    } catch (err) {
-      console.error('Failed to start recording', err);
-      Alert.alert('Error', 'Failed to start recording. Please check microphone permissions.');
-    }
-  }
-
-  async function stopRecording() {
-    console.log('Stopping recording..');
-    if (!recording) return;
-
-    setIsRecording(false);
-    setIsTranscribing(true);
-
-    try {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-
-      const uri = recording.getURI();
-      console.log('Recording stopped and stored at', uri);
-
-      if (uri) {
-        await transcribeAudio(uri, 'Recorded Audio');
-      }
-    } catch (error) {
-      console.error('Error stopping recording or transcribing:', error);
-      Alert.alert('Error', 'Failed to process recording');
-    } finally {
-      setRecording(undefined);
-      setIsTranscribing(false);
-    }
-  }
-
-  async function transcribeAudio(uri: string, filename: string = 'Audio File') {
-    setIsTranscribing(true);
-    try {
-      const result: TranscriptionResponse = await SpeechService.transcribeAudio(uri);
-      
-      if (result.success && result.transcription) {
-        setTranscriptions(prev => [...prev, result.transcription!]);
-        Alert.alert(
-          'Transcription Complete', 
-          `File: ${filename}\n\nTranscription: "${result.transcription}"`
+  const requestMicrophonePermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          {
+            title: 'Microphone Permission',
+            message: 'This app needs access to your microphone to record audio.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
         );
-      } else {
-        Alert.alert('Error', result.message || 'Failed to transcribe audio');
-      }
-    } catch (error) {
-      console.error('Transcription error:', error);
-      Alert.alert('Error', 'Failed to transcribe audio');
-    } finally {
-      setIsTranscribing(false);
-    }
-  }
-
-  async function pickAndUploadAudio() {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['audio/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const audioFile = result.assets[0];
-        console.log('Selected audio file:', audioFile);
         
-        await transcribeAudio(audioFile.uri, audioFile.name);
+        setHasPermission(granted === PermissionsAndroid.RESULTS.GRANTED);
+        
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          Alert.alert(
+            'Permission Required',
+            'Microphone permission is required to record audio.'
+          );
+        }
+      } catch (err) {
+        console.error('Error requesting microphone permission:', err);
+        setHasPermission(false);
       }
-    } catch (error) {
-      console.error('Error picking audio file:', error);
-      Alert.alert('Error', 'Failed to pick audio file');
-    }
-  }
-
-  const handleRecordPress = () => {
-    if (isRecording) {
-      stopRecording();
     } else {
-      startRecording();
+      // iOS permissions are handled differently, usually through Info.plist
+      setHasPermission(true);
     }
   };
 
-  const renderTabContent = () => {
-    if (activeTab === 'recorder') {
-      return (
-        <>
-          <TouchableOpacity
-            style={[
-              styles.recordButton,
-              isRecording ? styles.recordingButton : styles.idleButton,
-              (isTranscribing) && styles.disabledButton
-            ]}
-            onPress={handleRecordPress}
-            disabled={isTranscribing}
-          >
-            {isTranscribing ? (
-              <ActivityIndicator color="white" size="large" />
-            ) : (
-              <Text style={styles.recordButtonText}>
-                {isRecording ? '🛑 Stop Recording' : '🎤 Start Recording'}
-              </Text>
-            )}
-          </TouchableOpacity>
+  const startRecording = async () => {
+    if (!hasPermission) {
+      Alert.alert(
+        'Permission Required',
+        'Please grant microphone permission to record audio.'
+      );
+      return;
+    }
 
-          {isRecording && (
-            <View style={styles.recordingIndicator}>
-              <Text style={styles.recordingText}>🔴 Recording in progress...</Text>
-            </View>
-          )}
-        </>
-      );
-    } else {
-      return (
-        <TouchableOpacity
-          style={[styles.uploadButton, isTranscribing && styles.disabledButton]}
-          onPress={pickAndUploadAudio}
-          disabled={isTranscribing}
-        >
-          <Text style={styles.uploadButtonText}>
-            📁 Upload Audio File
-          </Text>
-        </TouchableOpacity>
-      );
+    try {
+      await AudioRecord.start();
+      setIsRecording(true);
+      setRecordingPath(null);
+      console.log('Recording started');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      const audioFile = await AudioRecord.stop();
+      setIsRecording(false);
+      setRecordingPath(audioFile);
+      console.log('Recording stopped. File saved at:', audioFile);
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      setIsRecording(false);
+      Alert.alert('Recording Error', 'Failed to stop recording.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Voice Transcription</Text>
-      
-      {/* Tab Buttons */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'recorder' ? styles.activeTab : styles.inactiveTab
-          ]}
-          onPress={() => setActiveTab('recorder')}
-        >
-          <Text style={[
-            styles.tabText,
-            activeTab === 'recorder' ? styles.activeTabText : styles.inactiveTabText
-          ]}>
-            🎤 Recorder
+      <View style={styles.header}>
+        <Text style={styles.title}>Audio Recorder</Text>
+        <Text style={styles.subtitle}>React Native Audio Record</Text>
+      </View>
+
+      <View style={styles.statusContainer}>
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusText}>
+            Permission: {hasPermission ? 'Granted ✓' : 'Not Granted ✗'}
           </Text>
-        </TouchableOpacity>
+        </View>
         
+        <View style={[styles.statusBadge, isRecording && styles.recordingBadge]}>
+          <Text style={[styles.statusText, isRecording && styles.recordingText]}>
+            Status: {isRecording ? 'Recording 🔴' : 'Ready'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.controlsContainer}>
         <TouchableOpacity
           style={[
-            styles.tabButton,
-            activeTab === 'upload' ? styles.activeTab : styles.inactiveTab
+            styles.recordButton,
+            isRecording && styles.stopButton,
           ]}
-          onPress={() => setActiveTab('upload')}
+          onPress={isRecording ? stopRecording : startRecording}
         >
-          <Text style={[
-            styles.tabText,
-            activeTab === 'upload' ? styles.activeTabText : styles.inactiveTabText
-          ]}>
-            📁 Upload
+          <Text style={styles.recordButtonText}>
+            {isRecording ? '🛑 Stop Recording' : '🎤 Start Recording'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Tab Content */}
-      <View style={styles.contentContainer}>
-        {renderTabContent()}
+      {recordingPath && (
+        <View style={styles.fileInfoContainer}>
+          <Text style={styles.fileInfoLabel}>Recording saved to:</Text>
+          <Text style={styles.filePathText}>{recordingPath}</Text>
+          <View style={styles.specsContainer}>
+            <Text style={styles.specsText}>Sample Rate: 16kHz</Text>
+            <Text style={styles.specsText}>Channels: Mono</Text>
+            <Text style={styles.specsText}>Format: 16-bit PCM WAV</Text>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Platform: {Platform.OS}
+        </Text>
+        <Text style={styles.footerText}>
+          Library: react-native-audio-record
+        </Text>
       </View>
-
-      {isTranscribing && (
-        <View style={styles.transcribingIndicator}>
-          <Text style={styles.transcribingText}>🔄 Processing audio...</Text>
-        </View>
-      )}
-
-      {transcriptions.length > 0 && (
-        <View style={styles.transcriptionsContainer}>
-          <Text style={styles.transcriptionsTitle}>Recent Transcriptions:</Text>
-          <ScrollView style={styles.scrollView}>
-            {transcriptions.map((text, index) => (
-              <View key={index} style={styles.transcriptionItem}>
-                <Text style={styles.transcriptionText}>
-                  {index + 1}. {text}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      )}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    margin: 16,
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-    elevation: 12,
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    padding: 20,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 30,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 32,
-    color: '#1a1a1a',
-    letterSpacing: -0.5,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 8,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 24,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: '#3b82f6',
-    boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
-    elevation: 4,
-  },
-  inactiveTab: {
-    backgroundColor: 'transparent',
-  },
-  tabText: {
+  subtitle: {
     fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  activeTabText: {
-    color: 'white',
-  },
-  inactiveTabText: {
     color: '#64748b',
+    marginBottom: 12,
   },
-  contentContainer: {
-    minHeight: 80,
-    justifyContent: 'center',
+  statusContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
   },
-  recordButton: {
-    paddingVertical: 18,
-    paddingHorizontal: 32,
+  statusBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 16,
-    minHeight: 64,
-    justifyContent: 'center',
-    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.15)',
-    elevation: 8,
-    transform: [{ scale: 1 }],
-  },
-  uploadButton: {
-    backgroundColor: '#10b981',
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 20,
-    minHeight: 64,
-    justifyContent: 'center',
-    boxShadow: '0 4px 24px rgba(16, 185, 129, 0.25)',
-    elevation: 8,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: '#bbf7d0',
+    marginBottom: 8,
   },
-  idleButton: {
-    backgroundColor: '#3b82f6',
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
-  },
-  recordingButton: {
-    backgroundColor: '#ef4444',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-  },
-  disabledButton: {
-    backgroundColor: '#9ca3af',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-    borderColor: 'rgba(156, 163, 175, 0.2)',
-  },
-  recordButtonText: {
-    color: 'white',
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  uploadButtonText: {
-    color: 'white',
-    fontSize: 17,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  recordingIndicator: {
-    alignItems: 'center',
-    marginBottom: 20,
+  recordingBadge: {
     backgroundColor: '#fef2f2',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
     borderColor: '#fecaca',
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#166534',
+    fontWeight: '600',
   },
   recordingText: {
     color: '#dc2626',
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.1,
   },
-  transcribingIndicator: {
+  controlsContainer: {
     alignItems: 'center',
-    marginBottom: 20,
-    backgroundColor: '#eff6ff',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
+    marginBottom: 30,
   },
-  transcribingText: {
-    color: '#2563eb',
-    fontSize: 16,
+  recordButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 25,
+    minWidth: 220,
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  stopButton: {
+    backgroundColor: '#dc2626',
+    shadowColor: '#dc2626',
+  },
+  recordButtonText: {
+    color: 'white',
+    fontSize: 18,
     fontWeight: '600',
-    letterSpacing: 0.1,
   },
-  transcriptionsContainer: {
-    marginTop: 24,
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
+  fileInfoContainer: {
+    backgroundColor: 'white',
     padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  transcriptionsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
+  fileInfoLabel: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#1e293b',
-    letterSpacing: -0.2,
-  },
-  scrollView: {
-    maxHeight: 240,
-  },
-  transcriptionItem: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
     marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3b82f6',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
   },
-  transcriptionText: {
-    fontSize: 15,
+  filePathText: {
+    fontSize: 14,
     color: '#374151',
-    lineHeight: 22,
-    letterSpacing: 0.1,
+    backgroundColor: '#f1f5f9',
+    padding: 12,
+    borderRadius: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 16,
   },
-}); 
+  specsContainer: {
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 8,
+  },
+  specsText: {
+    fontSize: 12,
+    color: '#1e40af',
+    marginBottom: 4,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+});
+
+export default AudioRecorder; 
