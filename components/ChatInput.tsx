@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LanguageLearningPromptType } from '../utils/chat';
+import AudioRecord from 'react-native-audio-record';
+import { whisperService } from '../services/whisperService';
 
 interface ChatInputProps {
   onSendMessage: (text: string) => void;
   isLoading: boolean;
-  promptType: LanguageLearningPromptType;
   colors: any;
   placeholder?: string;
 }
@@ -20,104 +21,118 @@ interface ChatInputProps {
 const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
-  promptType,
   colors,
   placeholder,
 }) => {
-  const [text, setText] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcription, setTranscription] = useState('');
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const recording = useRef<boolean>(false);
 
-  const handleSend = () => {
-    if (text.trim() && !isLoading) {
-      onSendMessage(text);
-      setText('');
+  // Setup audio recorder on mount
+  React.useEffect(() => {
+    const setupAudio = async () => {
+      const options = {
+        sampleRate: 16000,
+        channels: 1,
+        bitsPerSample: 16,
+        wavFile: 'recording.wav',
+      };
+      AudioRecord.init(options);
+      if (Platform.OS === 'android') {
+        try {
+          const granted = await (require('react-native').PermissionsAndroid).request(
+            require('react-native').PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            {
+              title: 'Microphone Permission',
+              message: 'This app needs access to your microphone to record audio.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+          setHasPermission(granted === require('react-native').PermissionsAndroid.RESULTS.GRANTED);
+        } catch (err) {
+          setHasPermission(false);
+        }
+      } else {
+        setHasPermission(true);
+      }
+    };
+    setupAudio();
+    return () => {
+      if (recording.current) AudioRecord.stop();
+    };
+  }, []);
+
+  const startRecording = async () => {
+    if (!hasPermission) {
+      Alert.alert('Permission Required', 'Please grant microphone permission to record audio.');
+      return;
     }
+    setIsRecording(true);
+    setTranscription('');
+    recording.current = true;
+    await AudioRecord.start();
   };
 
-  const getPlaceholder = () => {
-    if (placeholder) return placeholder;
-    
-    switch (promptType) {
-      case 'conversation':
-        return 'Start a conversation...';
-      case 'translation':
-        return 'Type text to translate...';
-      case 'grammar':
-        return 'Type text for grammar check...';
-      case 'vocabulary':
-        return 'Ask about a word or phrase...';
-      case 'pronunciation':
-        return 'Type a word to learn pronunciation...';
-      case 'cultural':
-        return 'Ask about cultural context...';
-      case 'roleplay':
-        return 'Continue the roleplay...';
-      default:
-        return 'Type your message...';
-    }
-  };
-
-  const getTypeIcon = () => {
-    switch (promptType) {
-      case 'conversation':
-        return '💬';
-      case 'translation':
-        return '🔄';
-      case 'grammar':
-        return '📝';
-      case 'vocabulary':
-        return '📖';
-      case 'pronunciation':
-        return '🗣️';
-      case 'cultural':
-        return '🌍';
-      case 'roleplay':
-        return '🎭';
-      default:
-        return '💬';
+  const stopRecording = async () => {
+    if (!recording.current) return;
+    setIsRecording(false);
+    recording.current = false;
+    const audioFile = await AudioRecord.stop();
+    if (audioFile) {
+      setIsTranscribing(true);
+      try {
+        const result = await whisperService.transcribe(audioFile);
+        let text = result.text?.trim() || '';
+        if (!text && Array.isArray(result.segments) && result.segments.length > 0) {
+          text = result.segments.map(seg => seg.text).join(' ').trim();
+        }
+        setTranscription(text);
+        if (text) {
+          setTimeout(() => {
+            onSendMessage(text);
+            setTranscription('');
+          }, 800); // show briefly
+        } else {
+          Alert.alert('No speech detected', 'Try speaking more clearly.');
+        }
+      } catch (err) {
+        Alert.alert('Transcription Error', 'Failed to transcribe audio.');
+      } finally {
+        setIsTranscribing(false);
+      }
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <View style={[styles.container, { backgroundColor: colors.surface }]}>  
       <View style={styles.inputContainer}>
-        <View style={styles.typeIndicator}>
-          <Text style={styles.typeIcon}>{getTypeIcon()}</Text>
-        </View>
-        
-        <TextInput
-          style={[
-            styles.textInput,
-            {
-              color: colors.text,
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-            },
-          ]}
-          value={text}
-          onChangeText={setText}
-          placeholder={getPlaceholder()}
-          placeholderTextColor={colors.muted}
-          multiline
-          maxLength={1000}
-          onSubmitEditing={handleSend}
-          blurOnSubmit={false}
-          editable={!isLoading}
-        />
-        
         <TouchableOpacity
           style={[
-            styles.sendButton,
-            {
-              backgroundColor: text.trim() && !isLoading ? colors.primary : colors.disabled,
-            },
+            styles.micButton,
+            isRecording ? styles.micButtonActive : {},
+            { backgroundColor: isRecording ? colors.error : colors.primary },
           ]}
-          onPress={handleSend}
-          disabled={!text.trim() || isLoading}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={isLoading || isTranscribing}
         >
-          <Text style={[styles.sendButtonText, { color: colors.surface }]}>
-            {isLoading ? '•••' : '→'}
-          </Text>
+          <Text style={styles.micIcon}>{isRecording ? '🛑' : '🎤'}</Text>
         </TouchableOpacity>
+        {isRecording && (
+          <Text style={[styles.statusText, { color: colors.error }]}>Recording...</Text>
+        )}
+        {isTranscribing && (
+          <View style={styles.transcribingContainer}>
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text style={[styles.statusText, { color: colors.primary }]}>Transcribing...</Text>
+          </View>
+        )}
+        {transcription ? (
+          <Text style={[styles.transcriptionText, { color: colors.text }]}>{transcription}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -133,42 +148,39 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
+    alignItems: 'center',
+    gap: 12,
   },
-  typeIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  micButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginRight: 8,
   },
-  typeIcon: {
+  micButtonActive: {
+    backgroundColor: '#dc2626',
+  },
+  micIcon: {
+    fontSize: 24,
+    color: 'white',
+  },
+  statusText: {
     fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
   },
-  textInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    maxHeight: 100,
-    textAlignVertical: 'top',
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  transcribingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginLeft: 8,
   },
-  sendButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  transcriptionText: {
+    fontSize: 16,
+    marginLeft: 12,
+    fontStyle: 'italic',
+    maxWidth: 180,
   },
 });
 
