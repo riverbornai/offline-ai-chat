@@ -15,6 +15,7 @@ import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from './StoreProvider';
 
+import Tts from 'react-native-tts';
 import ChatHeader from './ChatHeader';
 import ChatInput from './ChatInput';
 import MessageBubble from './MessageBubble';
@@ -49,6 +50,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [ttsBuffer, setTtsBuffer] = useState('');
+  const ttsRef = useRef('');
+  let ttsSpeaking = false;
 
   // Only conversation session
   useEffect(() => {
@@ -98,6 +102,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         author: 'assistant',
         type: 'conversation',
       });
+      Tts.stop();
+      setTtsBuffer('');
+      ttsRef.current = '';
       const completionPromise = modelStore.generateCompletion(
         simplePrompt,
         {
@@ -111,6 +118,21 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
             accumulatedResponse += token;
             const cleanedResponse = cleanLLMResponse(accumulatedResponse);
             chatSessionStore.updateMessage(assistantMessage.id, cleanedResponse);
+
+            // TTS streaming logic
+            ttsRef.current += token;
+            // Only speak when you have a full sentence or a long enough chunk
+            if (/[.!?]\s$/.test(ttsRef.current) || ttsRef.current.length > 30) {
+              const toSpeak = ttsRef.current.trim();
+              if (toSpeak && !ttsSpeaking) {
+                ttsSpeaking = true;
+                Tts.speak(toSpeak);
+                ttsRef.current = '';
+                Tts.addEventListener('tts-finish', () => {
+                  ttsSpeaking = false;
+                });
+              }
+            }
           }
         }
       );
