@@ -1,4 +1,3 @@
-import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
 
@@ -63,26 +62,7 @@ class WhisperService {
 
   private async checkModelExists(): Promise<boolean> {
     try {
-      // First check if model exists in assets
-      console.log('Checking for model in assets...');
-      
-      try {
-        // Try to load the asset using Asset.fromModule
-        // This will work if the model is properly bundled in the assets folder
-        const assetModule = require('../assets/models/ggml-tiny.en.bin');
-        const asset = Asset.fromModule(assetModule);
-        await asset.downloadAsync();
-        
-        if (asset.localUri) {
-          this.modelPath = asset.localUri;
-          console.log('Model found in assets:', asset.localUri);
-          return true;
-        }
-      } catch (assetError) {
-        console.log('Model not found in assets, checking documents directory...');
-      }
-      
-      // Check documents directory as fallback
+      // Only check documents directory for the model
       const documentsModelPath = `${FileSystem.documentDirectory}models/${WHISPER_CONFIG.modelName}`;
       const documentsInfo = await FileSystem.getInfoAsync(documentsModelPath);
       if (documentsInfo.exists) {
@@ -90,8 +70,7 @@ class WhisperService {
         console.log('Model found in documents directory:', documentsModelPath);
         return true;
       }
-      
-      console.log('Model not found in either location');
+      console.log('Model not found in documents directory');
       return false;
     } catch (error) {
       console.error('Error checking model existence:', error);
