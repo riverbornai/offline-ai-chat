@@ -3,12 +3,12 @@ import { makeAutoObservable, runInAction, toJS } from 'mobx';
 import { makePersistable } from 'mobx-persist-store';
 import { Platform } from 'react-native';
 import {
-    checkModelFileExists,
-    deleteModelFile,
-    ensureModelDirectories,
-    formatBytes,
-    getModelFileInfo,
-    getModelFilePath
+  checkModelFileExists,
+  deleteModelFile,
+  ensureModelDirectories,
+  formatBytes,
+  getModelFileInfo,
+  getModelFilePath
 } from '../utils/platformPaths';
 import { Storage } from '../utils/storage';
 
@@ -34,13 +34,13 @@ export interface CompletionParams {
 class ModelStore {
   models: LLMModel[] = [
     {
-      id: 'phi3-mini',
-      name: 'Phi-3 Mini (Language Learning)',
-      path: 'model/Phi-3-mini-4k-instruct-q4.gguf',
+      id: 'phi2-q4km',
+      name: 'Phi-2 Q4_K_M (1.3GB)',
+      path: 'model/phi-2.Q4_K_M.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '2.4GB',
-      description: 'Optimized for language learning conversations',
+      size: '1.3GB',
+      description: 'Phi-2 Q4_K_M quantized model for chat',
       languageSupport: ['English']
     }
   ];

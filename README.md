@@ -11,6 +11,7 @@ A complete React Native application that implements offline speech-to-text funct
 - **Audio Recording**: High-quality audio recording with proper configuration
 - **Transcription History**: Save and view previous transcriptions
 - **Error Handling**: Comprehensive error handling and user feedback
+- **Language Model**: Uses TinyLlama-1.1B-Chat Q4_K_M for chat (https://huggingface.co/cmp-nct/TinyLlama-1.1B-Chat-v1.0-GGUF)
 
 ## 📱 Screenshots
 

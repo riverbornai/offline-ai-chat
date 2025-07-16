@@ -18,7 +18,7 @@ export interface PlatformPaths {
 
 // Model download URLs - replace with actual download URLs
 const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
-  'Phi-3-mini-4k-instruct-q4.gguf': 'https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf',
+  'phi-2.Q4_K_M.gguf': 'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf',
 };
 
 /**

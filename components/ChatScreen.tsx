@@ -15,6 +15,8 @@ import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from './StoreProvider';
 
+import Tts from 'react-native-tts';
+import { whisperService } from '../services/whisperService';
 import ChatHeader from './ChatHeader';
 import ChatInput from './ChatInput';
 import MessageBubble from './MessageBubble';
@@ -28,6 +30,7 @@ const cleanLLMResponse = (response: string): string => {
     .replace(/<\|assistant\|>/g, '')
     .replace(/<\|user\|>/g, '')
     .replace(/<\|system\|>/g, '')
+    .replace(/<\|endoftext\|>/g, '') // Remove endoftext tokens
     // Remove markdown-style separators
     .replace(/^---+$/gm, '')
     // Remove "Instruction" or similar metadata
@@ -49,6 +52,11 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [ttsBuffer, setTtsBuffer] = useState('');
+  const ttsRef = useRef('');
+  let ttsSpeaking = false;
+  const [isWhisperLoading, setIsWhisperLoading] = useState(!whisperService.isModelLoaded());
+  const [whisperError, setWhisperError] = useState<string | null>(null);
 
   // Only conversation session
   useEffect(() => {
@@ -58,6 +66,24 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       chatSessionStore.createConversationSession(topic);
     }
   }, [sessionId, topic]);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!whisperService.isModelLoaded()) {
+      setIsWhisperLoading(true);
+      whisperService.initialize()
+        .then(() => {
+          if (mounted) setIsWhisperLoading(false);
+        })
+        .catch((err) => {
+          if (mounted) {
+            setWhisperError(err?.message || 'Failed to initialize Whisper');
+            setIsWhisperLoading(false);
+          }
+        });
+    }
+    return () => { mounted = false; };
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -98,6 +124,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         author: 'assistant',
         type: 'conversation',
       });
+      Tts.stop();
+      setTtsBuffer('');
+      ttsRef.current = '';
       const completionPromise = modelStore.generateCompletion(
         simplePrompt,
         {
@@ -111,6 +140,24 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
             accumulatedResponse += token;
             const cleanedResponse = cleanLLMResponse(accumulatedResponse);
             chatSessionStore.updateMessage(assistantMessage.id, cleanedResponse);
+
+            // TTS streaming logic
+            ttsRef.current += token;
+            // Only speak when you have a full sentence or a long enough chunk
+            if (/[.!?]\s$/.test(ttsRef.current) || ttsRef.current.length > 30) {
+              const toSpeak = ttsRef.current.trim();
+              // Only speak if not just punctuation or whitespace
+              if (toSpeak && !/^[\s.,!?;:]+$/.test(toSpeak) && !ttsSpeaking) {
+                ttsSpeaking = true;
+                Tts.speak(toSpeak);
+                ttsRef.current = '';
+                Tts.addEventListener('tts-finish', () => {
+                  ttsSpeaking = false;
+                });
+              } else {
+                ttsRef.current = '';
+              }
+            }
           }
         }
       );
@@ -146,7 +193,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
           <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
           <Text style={[styles.welcomeText, { color: colors.text }]}>To get started, you need to download and load a language model.</Text>
-          <Text style={[styles.welcomeText, { color: colors.muted }]}>📱 Go to the "Models" tab to download the Phi-3 Mini model (~2.4GB)</Text>
+          <Text style={[styles.welcomeText, { color: colors.muted }]}>📱 Go to the "Models" tab to download the TinyLlama-1.1B-Chat model (~0.8GB)</Text>
           <Text style={[styles.welcomeText, { color: colors.muted }]}>⚡ Once downloaded, tap "Load Model" to start chatting!</Text>
         </View>
       );
@@ -174,6 +221,26 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       <Text style={[styles.loadingText, { color: colors.muted }]}>Generating response...</Text>
     </View>
   );
+
+  if (isWhisperLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={colors.primary} size="large" />
+          <Text style={[styles.loadingText, { color: colors.muted }]}>Initializing Whisper Model...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  if (whisperError) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: colors.error }]}>Whisper Error: {whisperError}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
