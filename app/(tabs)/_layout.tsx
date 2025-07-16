@@ -23,27 +23,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Speech to Text',
+          title: 'Chat',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="mic" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="tts"
-        options={{
-          title: 'Text to Speech',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="volume-up" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="llm-chat"
-        options={{
-          title: 'AI Chat',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="chat" size={size} color={color} />
           ),
         }}
       />

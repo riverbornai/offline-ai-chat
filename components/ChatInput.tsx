@@ -53,11 +53,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
             }
           );
           setHasPermission(granted === require('react-native').PermissionsAndroid.RESULTS.GRANTED);
+          if (granted === require('react-native').PermissionsAndroid.RESULTS.GRANTED) {
+            AudioRecord.init(options);
+          }
         } catch (err) {
           setHasPermission(false);
         }
       } else {
         setHasPermission(true);
+        AudioRecord.init(options);
       }
     };
     setupAudio();
