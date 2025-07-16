@@ -34,13 +34,13 @@ export interface CompletionParams {
 class ModelStore {
   models: LLMModel[] = [
     {
-      id: 'phi3-mini',
-      name: 'Phi-3 Mini (Language Learning)',
-      path: 'model/Phi-3-mini-4k-instruct-q4.gguf',
+      id: 'phi2-q2k',
+      name: 'Phi-2 Q2_K (Lightweight Chat)',
+      path: 'model/phi-2.Q2_K.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '2.4GB',
-      description: 'Optimized for language learning conversations',
+      size: '1.2GB',
+      description: 'Lightweight Phi-2 model for chat, Q2_K quantized',
       languageSupport: ['English']
     }
   ];
