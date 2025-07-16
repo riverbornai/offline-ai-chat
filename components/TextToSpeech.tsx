@@ -40,6 +40,10 @@ export default function TextToSpeech() {
   const [pitch, setPitch] = useState(1.0);
   const [audioList, setAudioList] = useState<AudioItem[]>([]);
   const [currentPlayingId, setCurrentPlayingId] = useState<string | null>(null);
+  const [currentWordIndex, setCurrentWordIndex] = useState<number | null>(null);
+  const [liveStreaming, setLiveStreaming] = useState(false);
+  const [debouncedText, setDebouncedText] = useState(text);
+  const [lastSpokenText, setLastSpokenText] = useState('');
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -65,6 +69,11 @@ export default function TextToSpeech() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedText(text), 500);
+    return () => clearTimeout(handler);
+  }, [text]);
 
   const initializeTts = async () => {
     try {
@@ -183,57 +192,100 @@ export default function TextToSpeech() {
     }
   };
 
+  useEffect(() => {
+    if (!liveStreaming) return;
+    if (!debouncedText.trim()) {
+      if (Platform.OS === 'web') {
+        window.speechSynthesis.cancel();
+      } else {
+        Tts.stop();
+      }
+      setLastSpokenText('');
+      return;
+    }
+
+    // Find the new part to speak
+    let newPart = debouncedText;
+    if (debouncedText.startsWith(lastSpokenText)) {
+      newPart = debouncedText.slice(lastSpokenText.length);
+    }
+
+    if (!newPart.trim()) return; // nothing new to say
+
+    if (Platform.OS === 'web') {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(newPart);
+      const webVoices = window.speechSynthesis.getVoices();
+      const selectedWebVoice = webVoices.find(
+        voice => (voice.voiceURI || voice.name) === selectedVoice
+      );
+      if (selectedWebVoice) utterance.voice = selectedWebVoice;
+      utterance.rate = rate * 2;
+      utterance.pitch = pitch;
+      utterance.onend = () => setLastSpokenText(debouncedText);
+      utterance.onerror = () => setLastSpokenText(debouncedText);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      Tts.stop();
+      Tts.setDefaultRate(rate);
+      Tts.setDefaultPitch(pitch);
+      if (selectedVoice) Tts.setDefaultVoice(selectedVoice);
+      Tts.speak(newPart);
+      setLastSpokenText(debouncedText);
+    }
+  }, [debouncedText, liveStreaming, selectedVoice, rate, pitch]);
+
   const toggleAudioPlayback = async (audioItem: AudioItem) => {
     if (Platform.OS === 'web') {
       if (audioItem.isPlaying) {
-        // Pause audio
         window.speechSynthesis.cancel();
         setCurrentPlayingId(null);
+        setCurrentWordIndex(null);
         setAudioList(prev => prev.map(item => 
           item.id === audioItem.id ? { ...item, isPlaying: false } : item
         ));
       } else {
-        // Stop any currently playing audio
         window.speechSynthesis.cancel();
         setAudioList(prev => prev.map(item => ({ ...item, isPlaying: false })));
-        
-        // Play new audio
+        setCurrentWordIndex(null);
         const utterance = new SpeechSynthesisUtterance(audioItem.text);
-        
-        // Find selected voice
         const webVoices = window.speechSynthesis.getVoices();
         const selectedWebVoice = webVoices.find(
           voice => (voice.voiceURI || voice.name) === selectedVoice
         );
-        
         if (selectedWebVoice) {
           utterance.voice = selectedWebVoice;
         }
-        
         utterance.rate = rate * 2;
         utterance.pitch = pitch;
-        
         utterance.onstart = () => {
           setCurrentPlayingId(audioItem.id);
           setAudioList(prev => prev.map(item => 
             item.id === audioItem.id ? { ...item, isPlaying: true } : item
           ));
         };
-        
         utterance.onend = () => {
           setCurrentPlayingId(null);
+          setCurrentWordIndex(null);
           setAudioList(prev => prev.map(item => 
             item.id === audioItem.id ? { ...item, isPlaying: false } : item
           ));
         };
-        
         utterance.onerror = () => {
           setCurrentPlayingId(null);
+          setCurrentWordIndex(null);
           setAudioList(prev => prev.map(item => 
             item.id === audioItem.id ? { ...item, isPlaying: false } : item
           ));
         };
-        
+        utterance.onboundary = (event: any) => {
+          if (event.name === 'word') {
+            // Find word index by counting spaces before event.charIndex
+            const textUpToChar = audioItem.text.slice(0, event.charIndex);
+            const wordIndex = textUpToChar.trim().length === 0 ? 0 : textUpToChar.trim().split(/\s+/).length;
+            setCurrentWordIndex(wordIndex);
+          }
+        };
         window.speechSynthesis.speak(utterance);
       }
     } else {
@@ -242,6 +294,7 @@ export default function TextToSpeech() {
         // Stop audio
         await Tts.stop();
         setCurrentPlayingId(null);
+        setCurrentWordIndex(null);
         setAudioList(prev => prev.map(item => 
           item.id === audioItem.id ? { ...item, isPlaying: false } : item
         ));
@@ -269,6 +322,7 @@ export default function TextToSpeech() {
           
           const onTtsFinish = () => {
             setCurrentPlayingId(null);
+            setCurrentWordIndex(null);
             setAudioList(prev => prev.map(item => 
               item.id === audioItem.id ? { ...item, isPlaying: false } : item
             ));
@@ -287,6 +341,7 @@ export default function TextToSpeech() {
         } catch (error) {
           console.error('TTS playback error:', error);
           setCurrentPlayingId(null);
+          setCurrentWordIndex(null);
           setAudioList(prev => prev.map(item => 
             item.id === audioItem.id ? { ...item, isPlaying: false } : item
           ));
@@ -304,6 +359,7 @@ export default function TextToSpeech() {
         await Tts.stop();
       }
       setCurrentPlayingId(null);
+      setCurrentWordIndex(null);
     }
     
     // Remove from list
@@ -336,39 +392,64 @@ export default function TextToSpeech() {
     </TouchableOpacity>
   );
 
-  const renderAudioItem = ({ item }: { item: AudioItem }) => (
-    <View style={[styles.audioItem, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.audioItemHeader}>
-        <Text style={[styles.audioTimestamp, { color: colors.muted }]}>
-          {item.timestamp.toLocaleTimeString()}
-        </Text>
-        <TouchableOpacity
-          onPress={() => deleteAudioItem(item.id)}
-          style={styles.deleteButton}
-        >
-          <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
-      </View>
-      
-      <Text style={[styles.audioText, { color: colors.text }]} numberOfLines={2}>
-        {item.text}
-      </Text>
-      
-      <View style={styles.audioControls}>
-        <TouchableOpacity
-          style={[
-            styles.playButton,
-            { backgroundColor: item.isPlaying ? '#ff4444' : colors.primary }
-          ]}
-          onPress={() => toggleAudioPlayback(item)}
-        >
-          <Text style={styles.playButtonText}>
-            {item.isPlaying ? '⏸️ Pause' : '▶️ Play'}
+  const renderAudioItem = ({ item }: { item: AudioItem }) => {
+    // For word streaming highlight
+    let textContent: React.ReactNode = item.text;
+    if (
+      Platform.OS === 'web' &&
+      item.isPlaying &&
+      item.id === currentPlayingId &&
+      currentWordIndex !== null
+    ) {
+      const words = item.text.split(/(\s+)/); // keep spaces
+      textContent = words.map((word, idx) => {
+        // Only highlight non-space words
+        const wordIdx = words.slice(0, idx).filter(w => !/^\s+$/.test(w)).length;
+        const isCurrent = wordIdx === currentWordIndex;
+        return /^\s+$/.test(word) ? (
+          word
+        ) : (
+          <Text
+            key={idx}
+            style={isCurrent ? [styles.audioText, { backgroundColor: '#ffe066', borderRadius: 4 }] : styles.audioText}
+          >
+            {word}
           </Text>
-        </TouchableOpacity>
+        );
+      });
+    }
+    return (
+      <View style={[styles.audioItem, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+        <View style={styles.audioItemHeader}>
+          <Text style={[styles.audioTimestamp, { color: colors.muted }]}> 
+            {item.timestamp.toLocaleTimeString()} 
+          </Text>
+          <TouchableOpacity
+            onPress={() => deleteAudioItem(item.id)}
+            style={styles.deleteButton}
+          >
+            <Text style={styles.deleteButtonText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={[styles.audioText, { color: colors.text, flexWrap: 'wrap', flexDirection: 'row' }]} numberOfLines={2}>
+          {textContent}
+        </Text>
+        <View style={styles.audioControls}>
+          <TouchableOpacity
+            style={[
+              styles.playButton,
+              { backgroundColor: item.isPlaying ? '#ff4444' : colors.primary }
+            ]}
+            onPress={() => toggleAudioPlayback(item)}
+          >
+            <Text style={styles.playButtonText}>
+              {item.isPlaying ? '⏸️ Pause' : '▶️ Play'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -453,6 +534,24 @@ export default function TextToSpeech() {
                 <Text style={styles.controlButtonText}>+</Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          {/* Live Streaming Toggle */}
+          <View style={styles.controlRow}>
+            <Text style={[styles.controlLabel, { color: colors.text }]}>
+              Live Streaming
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.controlButton,
+                { backgroundColor: liveStreaming ? colors.primary : colors.muted }
+              ]}
+              onPress={() => setLiveStreaming(v => !v)}
+            >
+              <Text style={styles.controlButtonText}>
+                {liveStreaming ? 'On' : 'Off'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 

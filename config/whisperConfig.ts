@@ -1,6 +1,5 @@
 export const WHISPER_CONFIG = {
   modelName: 'ggml-tiny.en.bin',
-  modelPath: 'assets/models/ggml-tiny.en.bin', // or file system path
   modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin',
   modelSize: 'tiny',
   language: 'en',
