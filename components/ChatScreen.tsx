@@ -193,7 +193,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
           <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
           <Text style={[styles.welcomeText, { color: colors.text }]}>To get started, you need to download and load a language model.</Text>
-          <Text style={[styles.welcomeText, { color: colors.muted }]}>📱 Go to the "Models" tab to download the TinyLlama-1.1B-Chat model (~0.8GB)</Text>
+          <Text style={[styles.welcomeText, { color: colors.muted }]}>📱 Go to the "Models" tab to download the Phi-2 Q4_K_M (1.7GB) model</Text>
           <Text style={[styles.welcomeText, { color: colors.muted }]}>⚡ Once downloaded, tap "Load Model" to start chatting!</Text>
         </View>
       );
@@ -210,7 +210,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     return (
       <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
         <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
-        <Text style={[styles.welcomeText, { color: colors.text }]}>Start chatting below!</Text>
+        <Text style={[styles.welcomeText, { color: colors.text }]}>Start chatting below! (Powered by Phi-2 Q4_K_M 1.7GB)</Text>
       </View>
     );
   };
@@ -222,16 +222,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     </View>
   );
 
-  if (isWhisperLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={[styles.loadingText, { color: colors.muted }]}>Initializing Whisper Model...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
   if (whisperError) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
@@ -274,6 +264,12 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           isLoading={isLoading}
           colors={colors}
         />
+        {isWhisperLoading && (
+          <View style={styles.whisperOverlay} pointerEvents="none">
+            <ActivityIndicator color={colors.primary} size="large" />
+            <Text style={[styles.loadingText, { color: colors.muted }]}>Initializing Whisper Model...</Text>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -349,6 +345,17 @@ const styles = StyleSheet.create({
     zIndex: -1,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+  },
+  whisperOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 });
 

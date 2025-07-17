@@ -34,13 +34,23 @@ export interface CompletionParams {
 class ModelStore {
   models: LLMModel[] = [
     {
-      id: 'phi2-q4km',
-      name: 'Phi-2 Q4_K_M (1.3GB)',
-      path: 'model/phi-2.Q4_K_M.gguf',
+      id: 'phi3-mini-4k-instruct',
+      name: 'Phi-3 Mini 4K Instruct',
+      path: 'model/phi-3-mini-4k-instruct-q4.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '1.3GB',
-      description: 'Phi-2 Q4_K_M quantized model for chat',
+      size: '1.8GB', // update with real size
+      description: 'Phi-3 Mini 4K Instruct model for chat',
+      languageSupport: ['English']
+    },
+    {
+      id: 'tinyllama-1.1b-chat-v1.0-q4_k_m',
+      name: 'TinyLlama-1.1B Chat v1.0 Q4_K_M',
+      path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+      isDownloaded: false,
+      isLoading: false,
+      size: '430MB',
+      description: 'TinyLlama-1.1B Chat v1.0 Q4_K_M quantized model for chat',
       languageSupport: ['English']
     }
   ];

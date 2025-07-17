@@ -25,7 +25,7 @@ const ModelsScreen: React.FC = observer(() => {
   const [setupMessage, setSetupMessage] = useState<string>('');
   const [setupStatus, setSetupStatus] = useState<'idle' | 'progress' | 'success' | 'error'>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
-  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
 
   const handleLoadModel = async (modelId: string) => {
     const model = modelStore.models.find(m => m.id === modelId);
@@ -51,7 +51,7 @@ const ModelsScreen: React.FC = observer(() => {
 
   const handleDownload = async (modelId: string) => {
     try {
-      setIsDownloading(true);
+      setDownloadingModelId(modelId);
       setSetupMessage('');
       setSetupStatus('progress');
       setDownloadProgress(0);
@@ -72,7 +72,7 @@ const ModelsScreen: React.FC = observer(() => {
             setSetupStatus('idle');
             setSetupMessage('');
             setDownloadProgress(0);
-            setIsDownloading(false);
+            setDownloadingModelId(null);
           }, 3000);
         },
         onError: (message) => {
@@ -82,7 +82,7 @@ const ModelsScreen: React.FC = observer(() => {
           setTimeout(() => {
             setSetupStatus('idle');
             setSetupMessage('');
-            setIsDownloading(false);
+            setDownloadingModelId(null);
           }, 5000);
         }
       });
@@ -93,7 +93,7 @@ const ModelsScreen: React.FC = observer(() => {
       setTimeout(() => {
         setSetupStatus('idle');
         setSetupMessage('');
-        setIsDownloading(false);
+        setDownloadingModelId(null);
       }, 5000);
     }
   };
@@ -142,7 +142,7 @@ const ModelsScreen: React.FC = observer(() => {
     }
   };
 
-  const renderModelCard = (model: typeof modelStore.models[0]) => {
+  const renderModelCard = (model: typeof modelStore.models[1]) => {
     const isActive = modelStore.activeModelId === model.id;
     const isLoading = model.isLoading || (modelStore.isContextLoading && modelStore.activeModelId === model.id);
     const isQuickSetupLoading = modelStore.isQuickSetupLoading;
@@ -168,7 +168,7 @@ const ModelsScreen: React.FC = observer(() => {
             backgroundColor: ready ? colors.success : (model.isDownloaded ? colors.warning : colors.muted)
           }]}>
             <Text style={[styles.statusText, { color: colors.surface }]}>
-              {isDownloading ? 'Downloading...' : isQuickSetupLoading ? 'Setting up...' : ready ? 'Ready' : (model.isDownloaded ? 'Downloaded' : 'Available')}
+              {downloadingModelId === model.id ? 'Downloading...' : isQuickSetupLoading ? 'Setting up...' : ready ? 'Ready' : (model.isDownloaded ? 'Downloaded' : 'Available')}
             </Text>
           </View>
         </View>
@@ -207,7 +207,7 @@ const ModelsScreen: React.FC = observer(() => {
         )}
 
         {/* Download Progress Bar */}
-        {isDownloading && downloadProgress > 0 && (
+        {downloadingModelId === model.id && downloadProgress > 0 && (
           <View style={styles.progressContainer}>
             <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
               <View 
@@ -231,12 +231,12 @@ const ModelsScreen: React.FC = observer(() => {
             <TouchableOpacity
               style={[styles.setupButton, { backgroundColor: colors.primary }]}
               onPress={() => handleDownload(model.id)}
-              disabled={isLoading || isQuickSetupLoading || isDownloading}
+              disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
             >
-              {isLoading || isQuickSetupLoading || isDownloading ? (
+              {isLoading || isQuickSetupLoading || downloadingModelId === model.id ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: colors.surface }]}>
+                <Text style={[styles.buttonText, { color: colors.surface }]}> 
                   📥 Download Model
                 </Text>
               )}
@@ -351,7 +351,7 @@ const ModelsScreen: React.FC = observer(() => {
             ℹ️ Getting Started
           </Text>
           <Text style={[styles.infoText, { color: colors.text }]}>
-            {`1. Download the Phi-2 Q2_K model (1.2GB) - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the AI Chat tab\n4. Release the model when not in use to save memory`}
+            {`1. Download the Phi-2 Q4_K_M (1.7GB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the AI Chat tab\n4. Release the model when not in use to save memory`}
           </Text>
         </View>
       </ScrollView>
@@ -537,4 +537,5 @@ const styles = StyleSheet.create({
   },
 });
 
+export default ModelsScreen; 
 export default ModelsScreen; 
