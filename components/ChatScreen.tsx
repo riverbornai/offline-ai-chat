@@ -17,6 +17,7 @@ import { useStores } from './StoreProvider';
 
 import Tts from 'react-native-tts';
 import { whisperService } from '../services/whisperService';
+import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
 import ChatInput from './ChatInput';
 import MessageBubble from './MessageBubble';
@@ -117,8 +118,19 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     let tokensReceived = 0;
     let isGenerationComplete = false;
     try {
-      // Simple prompt for conversation
-      const simplePrompt = `User: ${text}\nAssistant:`;
+      // Use ConversationPromptBuilder for advanced prompt
+      const conversationContext = {
+        targetLanguage: chatSessionStore.settings.targetLanguage,
+        nativeLanguage: chatSessionStore.settings.nativeLanguage,
+        learningLevel: chatSessionStore.settings.learningLevel,
+        correctionPreference: chatSessionStore.settings.correctionPreference,
+        topic: topic || '',
+      };
+      const promptBuilder = new ConversationPromptBuilder(conversationContext);
+      const prompt = promptBuilder.buildPrompt(
+        text,
+        chatSessionStore.currentMessages
+      );
       const assistantMessage = chatSessionStore.addMessage({
         text: '',
         author: 'assistant',
@@ -128,10 +140,11 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       setTtsBuffer('');
       ttsRef.current = '';
       const completionPromise = modelStore.generateCompletion(
-        simplePrompt,
+        prompt,
         {
           temperature: 0.7,
           max_tokens: 100,
+          stop: ['\nUser:', '\nAssistant:', '</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>'],
         },
         (token: string) => {
           if (isGenerationComplete) return;
@@ -164,7 +177,17 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       const result = await completionPromise as string;
       isGenerationComplete = true;
       if (assistantMessage) {
-        const finalResponse = result || accumulatedResponse;
+        let finalResponse = result || accumulatedResponse;
+        // Truncate at first stop sequence
+        const stopSequences = ['\nUser:', '\nAssistant:', '</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>'];
+        let minIdx = finalResponse.length;
+        for (const stop of stopSequences) {
+          const idx = finalResponse.indexOf(stop);
+          if (idx !== -1 && idx < minIdx) minIdx = idx;
+        }
+        if (minIdx !== finalResponse.length) {
+          finalResponse = finalResponse.slice(0, minIdx);
+        }
         if (finalResponse) {
           const finalCleanedResponse = cleanLLMResponse(finalResponse);
           chatSessionStore.updateMessage(assistantMessage.id, finalCleanedResponse);

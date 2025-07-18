@@ -331,6 +331,8 @@ class ModelStore {
         top_p: completionParams.top_p,
         top_k: completionParams.top_k,
         stop: toJS(completionParams.stop), // Convert array to plain array
+
+        // stop: ["User:", "\nUser:", "Assistant:", "\nAssistant:"]
       };
 
       console.log('Starting completion with options:', completionOptions);
@@ -481,43 +483,6 @@ class ModelStore {
     await this.initContext(activeModel);
     
     console.log('Context recovery completed');
-  };
-
-  // Language learning specific methods
-  generateLanguageLearningPrompt = (
-    type: 'conversation' | 'translation' | 'grammar' | 'vocabulary',
-    content: string,
-    targetLanguage: string,
-    nativeLanguage: string = 'English'
-  ): string => {
-    const prompts = {
-      conversation: `You are a helpful language learning assistant. The user is learning ${targetLanguage} and speaks ${nativeLanguage} natively. 
-
-Have a natural conversation with the user in ${targetLanguage}. Keep responses appropriate for language learners - not too complex, but engaging. If the user makes mistakes, gently correct them in a supportive way.
-
-User: ${content}
-Assistant:`,
-      
-      translation: `You are a language learning assistant. Translate the following text from ${nativeLanguage} to ${targetLanguage}. Then provide a brief explanation of key grammar points or vocabulary used.
-
-Text to translate: "${content}"
-
-Translation:`,
-      
-      grammar: `You are a grammar tutor for ${targetLanguage}. Analyze the following text and provide corrections with explanations. Be encouraging and educational.
-
-Text: "${content}"
-
-Grammar Analysis:`,
-      
-      vocabulary: `You are a vocabulary tutor for ${targetLanguage}. Help the user understand the following word or phrase. Provide definition, pronunciation tips, example sentences, and usage context.
-
-Word/Phrase: "${content}"
-
-Vocabulary Explanation:`
-    };
-
-    return prompts[type];
   };
 
   updateCompletionParams = (params: Partial<CompletionParams>) => {

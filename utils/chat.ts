@@ -22,35 +22,57 @@ export class ConversationPromptBuilder {
 
   private getBaseContext(): string {
     const { targetLanguage, nativeLanguage, learningLevel, correctionPreference } = this.context;
-    return `You are a helpful language learning assistant. The user is learning ${targetLanguage} and speaks ${nativeLanguage} natively. Their current level is ${learningLevel}.
+    return `You are a helpful **English tutor** and language learning assistant. The user is learning ${targetLanguage} and speaks ${nativeLanguage} natively. Your role is to guide them like a private tutor and help them practice conversation naturally. Their current level is ${learningLevel}.
+
 
 ${correctionPreference === 'always' ? 'Always provide gentle corrections and explanations for any mistakes.' :
   correctionPreference === 'sometimes' ? 'Provide corrections when they would be helpful for learning, but prioritize natural conversation flow.' :
   'Focus on understanding and communication rather than corrections unless specifically asked.'}`;
   }
 
-  private buildConversationPrompt(userInput: string, baseContext: string, conversationHistory: ChatMessage[] = []): string {
+  private buildConversationPrompt(
+    userInput: string,
+    baseContext: string,
+    conversationHistory: ChatMessage[] = []
+  ): string {
     const levelGuidance = this.getLevelGuidance();
-    const topicContext = this.context.topic ? `The conversation topic is about: ${this.context.topic}.` : '';
-    const historyContext = conversationHistory.length > 0
-      ? `\n\nPrevious conversation:\n${MessageFormatter.formatForContext(conversationHistory, 1500)}\n`
-      : '';
+    const topicContext = this.context.topic
+      ? `The conversation topic is: ${this.context.topic}. Keep the discussion relevant to this topic.`
+      : 'No specific topic was provided, so you may introduce simple and engaging topics for practice.';
+      
+    const correctionInstruction =
+      this.context.correctionPreference === 'always'
+        ? 'Gently correct any mistakes the user makes and explain why. Focus on helping them learn.'
+        : this.context.correctionPreference === 'sometimes'
+        ? 'Correct mistakes only if they interfere with understanding, and prioritize a natural conversation flow.'
+        : 'Do not correct mistakes unless the user specifically asks for corrections. Focus on communication.';
+  
+    const historyContext =
+      conversationHistory.length > 0
+        ? `\n\nHere is the previous conversation for context:\n${MessageFormatter.formatForContext(conversationHistory, 1500)}\n`
+        : '';
+  
     return `${baseContext}
 
-Have a natural conversation with the user in ${this.context.targetLanguage}. ${levelGuidance} ${topicContext}
+You are a friendly, intelligent, and patient AI language tutor helping the user practice ${this.context.targetLanguage}. Respond conversationally, as if you are a real person chatting in real life. Use natural, engaging language, and feel free to use emojis if appropriate.
 
-Keep your responses engaging and encourage the user to continue practicing. If they make mistakes, handle them according to the correction preference above.
+### Your Role:
+- Encourage the user to practice their ${this.context.targetLanguage} and build confidence.
+- ${correctionInstruction}
+- ${levelGuidance}
+- Ask follow-up questions to keep the conversation going and make it interactive.
+- Share interesting facts, cultural notes, or idioms when relevant.
+- Avoid simulating the user's responses. Only generate the Assistant's reply.
+- Never generate the user's next message. Only generate the assistant's reply.
+- Keep responses concise, friendly, and tailored to their level.
 
-IMPORTANT: 
-- Respond with ONLY ONE very short, natural sentence.
-- Do NOT add extra greetings, explanations, or follow-up questions.
-- Do NOT repeat yourself or elaborate.
-- Do NOT use any formatting, tags, or metadata.
-- Do NOT add any notes, explanations, or meta-comments. Only reply with a short, natural sentence.
-- Wait for the user's next message before saying anything else${historyContext}
+${topicContext}
+${historyContext}
 
-User: ${userInput}`;
+User: ${userInput}
+Assistant:`;
   }
+  
 
   private getLevelGuidance(): string {
     switch (this.context.learningLevel) {
@@ -71,12 +93,25 @@ export class MessageFormatter {
   static formatChatHistory(messages: ChatMessage[]): string {
     return messages.map(msg => {
       const role = msg.author === 'user' ? 'User' : 'Assistant';
-      return `${role}: ${msg.text}`;
+      // Clean the text to remove any potential configuration artifacts
+      const cleanText = msg.text.replace(/[{}"]/g, '').replace(/,\s*"stop":\s*\[.*?\]/g, '').trim();
+      return `${role}: ${cleanText}`;
     }).join('\n');
   }
 
   static formatForContext(messages: ChatMessage[], maxLength: number = 2000): string {
-    const formatted = this.formatChatHistory(messages);
+    // Filter out any messages that might contain configuration artifacts
+    const cleanMessages = messages.filter(msg => {
+      const text = msg.text || '';
+      // Skip messages that contain configuration-like content
+      return !text.includes('"stop":') && 
+             !text.includes('"temperature":') && 
+             !text.includes('"max_tokens":') &&
+             !text.includes('"top_p":') &&
+             !text.includes('"top_k":');
+    });
+    
+    const formatted = this.formatChatHistory(cleanMessages);
     if (formatted.length <= maxLength) {
       return formatted;
     }

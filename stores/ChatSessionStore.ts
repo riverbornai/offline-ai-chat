@@ -46,7 +46,7 @@ class ChatSessionStore {
   
   // Language learning settings
   settings: LanguageLearningSettings = {
-    targetLanguage: 'Spanish',
+    targetLanguage: 'English',
     nativeLanguage: 'English',
     learningLevel: 'beginner',
     focusAreas: ['conversation', 'grammar'],
@@ -196,6 +196,24 @@ class ChatSessionStore {
   updateSettings = (settings: Partial<LanguageLearningSettings>) => {
     runInAction(() => {
       this.settings = { ...this.settings, ...settings };
+    });
+  };
+
+  // Clean corrupted messages from the active session
+  cleanCorruptedMessages = () => {
+    if (!this.activeSession) return;
+    
+    runInAction(() => {
+      if (this.activeSession) {
+        this.activeSession.messages = this.activeSession.messages.filter(msg => {
+          const text = msg.text || '';
+          return !text.includes('"stop":') && 
+                 !text.includes('"temperature":') && 
+                 !text.includes('"max_tokens":') &&
+                 !text.includes('"top_p":') &&
+                 !text.includes('"top_k":');
+        });
+      }
     });
   };
 
