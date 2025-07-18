@@ -331,8 +331,6 @@ class ModelStore {
         top_p: completionParams.top_p,
         top_k: completionParams.top_k,
         stop: toJS(completionParams.stop), // Convert array to plain array
-
-        // stop: ["User:", "\nUser:", "Assistant:", "\nAssistant:"]
       };
 
       console.log('Starting completion with options:', completionOptions);
