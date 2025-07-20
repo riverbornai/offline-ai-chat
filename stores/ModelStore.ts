@@ -70,7 +70,7 @@ class ModelStore {
   // Default completion parameters for language learning
   defaultCompletionParams: CompletionParams = {
     temperature: 0.7,
-    max_tokens: 500,
+    max_tokens: 100,
     top_p: 0.9,
     top_k: 40,
     stop: ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>']
@@ -285,22 +285,22 @@ class ModelStore {
   };
 
   // Test method to verify completion is working
-  testCompletion = async (): Promise<string> => {
-    if (!this.context) {
-      throw new Error('No model context available');
-    }
+  // testCompletion = async (): Promise<string> => {
+  //   if (!this.context) {
+  //     throw new Error('No model context available');
+  //   }
 
-    console.log('Testing completion with simple prompt...');
+  //   console.log('Testing completion with simple prompt...');
     
-    try {
-      const result = await this.generateCompletion('Hello', { max_tokens: 10 });
-      console.log('Test completion result:', result);
-      return result;
-    } catch (error) {
-      console.error('Test completion failed:', error);
-      throw error;
-    }
-  };
+  //   try {
+  //     const result = await this.generateCompletion('Hello', { max_tokens: 10 });
+  //     console.log('Test completion result:', result);
+  //     return result;
+  //   } catch (error) {
+  //     console.error('Test completion failed:', error);
+  //     throw error;
+  //   }
+  // };
 
   generateCompletion = async (
     prompt: string,
@@ -322,7 +322,6 @@ class ModelStore {
 
     try {
       let fullResponse = '';
-      
       // Ensure all parameters are plain objects, not MobX observables
       const completionOptions = {
         prompt: prompt,
