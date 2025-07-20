@@ -1,13 +1,13 @@
 import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,8 +19,8 @@ import Tts from 'react-native-tts';
 import { whisperService } from '../services/whisperService';
 import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
-import ChatInput from './ChatInput';
 import MessageBubble from './MessageBubble';
+import RealtimeChatInput from './RealtimeChatInput';
 
 // Clean up LLM response by removing unwanted formatting and metadata
 const cleanLLMResponse = (response: string): string => {
@@ -282,7 +282,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           ))}
           {isLoading && renderLoadingIndicator()}
         </ScrollView>
-        <ChatInput
+        <RealtimeChatInput
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
           colors={colors}

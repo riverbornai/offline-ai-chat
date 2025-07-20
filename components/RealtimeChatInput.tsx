@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { Audio } from 'expo-av';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -9,17 +9,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import AudioRecord from 'react-native-audio-record';
-import { whisperService } from '../services/whisperService';
+import { RealtimeTranscriptionResult, whisperService } from '../services/whisperService';
 
-interface ChatInputProps {
+interface RealtimeChatInputProps {
   onSendMessage: (text: string) => void;
   isLoading: boolean;
   colors: any;
   placeholder?: string;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({
+const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
   onSendMessage,
   isLoading,
   colors,
@@ -30,45 +29,40 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [transcription, setTranscription] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const recording = useRef<boolean>(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const audioInterval = useRef<number | null>(null);
 
   // Setup audio recorder on mount
   React.useEffect(() => {
     const setupAudio = async () => {
-      const options = {
-        sampleRate: 16000,
-        channels: 1,
-        bitsPerSample: 16,
-        wavFile: `${FileSystem.documentDirectory}recording.wav`,
-      };
-      AudioRecord.init(options);
-      if (Platform.OS === 'android') {
-        try {
-          const granted = await (require('react-native').PermissionsAndroid).request(
-            require('react-native').PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-            {
-              title: 'Microphone Permission',
-              message: 'This app needs access to your microphone to record audio.',
-              buttonNeutral: 'Ask Me Later',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            }
-          );
-          setHasPermission(granted === require('react-native').PermissionsAndroid.RESULTS.GRANTED);
-          if (granted === require('react-native').PermissionsAndroid.RESULTS.GRANTED) {
-            AudioRecord.init(options);
-          }
-        } catch (err) {
-          setHasPermission(false);
+      try {
+        // Request audio recording permissions
+        const { status } = await Audio.requestPermissionsAsync();
+        const hasPermission = status === 'granted';
+        setHasPermission(hasPermission);
+        console.log('Audio permission status:', status);
+        
+        if (hasPermission) {
+          // Configure audio mode for recording
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: false,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+          });
+          console.log('Audio mode configured for recording');
         }
-      } else {
-        setHasPermission(true);
-        AudioRecord.init(options);
+      } catch (error) {
+        console.error('Error setting up audio recorder:', error);
+        setHasPermission(false);
       }
     };
     setupAudio();
     return () => {
-      if (recording.current) AudioRecord.stop();
+      if (recording.current && recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync();
+      }
       if (audioInterval.current) {
         clearInterval(audioInterval.current);
       }
@@ -86,9 +80,46 @@ const ChatInput: React.FC<ChatInputProps> = ({
     recording.current = true;
     
     try {
-      // Start audio recording
-      await AudioRecord.start();
-      console.log('Recording started - will process after stop');
+      // Start real-time transcription (if available)
+      try {
+        await whisperService.startRealtimeTranscription({
+          onTranscriptionUpdate: (result: RealtimeTranscriptionResult) => {
+            setTranscription(result.text);
+            if (result.isFinal && result.text.trim()) {
+              // Auto-send when transcription is final and has content
+              setTimeout(() => {
+                onSendMessage(result.text.trim());
+                setTranscription('');
+              }, 1000); // Small delay to show final result
+            }
+          },
+          onError: (error: Error) => {
+            console.error('Realtime transcription error:', error);
+            // Don't show alert, just log and continue with batch processing
+            console.log('Falling back to batch processing');
+          },
+          onComplete: (finalResult) => {
+            console.log('Realtime transcription completed:', finalResult);
+          }
+        });
+      } catch (error) {
+        console.log('Realtime transcription not available, using batch processing:', error);
+        // Continue with recording - will process after stop
+      }
+
+      // Start audio recording with Expo AV
+      try {
+        console.log('Starting audio recording with Expo AV...');
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        recordingRef.current = recording;
+        console.log('Audio recording started successfully');
+      } catch (error) {
+        console.error('Error starting audio recording:', error);
+        throw error;
+      }
+      
       
     } catch (error) {
       console.error('Error starting recording:', error);
@@ -112,7 +143,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
     try {
       // Stop audio recording
-      const audioFile = await AudioRecord.stop();
+      if (!recordingRef.current) {
+        throw new Error('Audio recorder not initialized');
+      }
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
+      
+      if (!uri) {
+        throw new Error('No audio file URI available');
+      }
+      
+      const audioFile = uri;
+      
+      // Stop real-time transcription (if it was started)
+      try {
+        await whisperService.stopRealtimeTranscription();
+      } catch (error) {
+        console.log('Real-time transcription was not active:', error);
+      }
       
       // Process the recorded audio file
       if (audioFile) {
@@ -218,4 +267,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ChatInput; 
+export default RealtimeChatInput; 

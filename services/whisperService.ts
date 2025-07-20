@@ -3,15 +3,14 @@ import { WHISPER_CONFIG } from '../config/whisperConfig';
 
 // Import whisper.rn - this will throw if not available
 let initWhisper: any = null;
-let WhisperContext: any = null;
 let isWhisperAvailable = false;
 
 try {
   const whisperModule = require('whisper.rn');
   initWhisper = whisperModule.initWhisper;
-  WhisperContext = whisperModule.WhisperContext;
   isWhisperAvailable = true;
-  console.log('whisper.rn loaded successfully');
+  console.log('whisper.rn loaded successfully - version 0.4.3+');
+  console.log('Available modules:', Object.keys(whisperModule));
 } catch (error) {
   console.error('whisper.rn not available:', error);
   isWhisperAvailable = false;
@@ -27,10 +26,24 @@ export interface WhisperResult {
   language?: string;
 }
 
+export interface RealtimeTranscriptionResult {
+  text: string;
+  isFinal: boolean;
+  language?: string;
+}
+
+export interface RealtimeTranscriptionCallbacks {
+  onTranscriptionUpdate?: (result: RealtimeTranscriptionResult) => void;
+  onError?: (error: Error) => void;
+  onComplete?: (finalResult: WhisperResult) => void;
+}
+
 class WhisperService {
   private context: any = null;
+  private realtimeTranscriber: any = null;
   private modelLoaded = false;
   private modelPath: string | null = null;
+  private isRealtimeActive = false;
 
   async initialize(): Promise<void> {
     try {
@@ -179,6 +192,105 @@ class WhisperService {
       console.error('Whisper transcription error:', error);
       throw error;
     }
+  }
+
+  async startRealtimeTranscription(callbacks: RealtimeTranscriptionCallbacks): Promise<void> {
+    if (!this.modelLoaded) {
+      throw new Error('Whisper model not loaded');
+    }
+
+    if (!isWhisperAvailable || !this.context) {
+      throw new Error('whisper.rn native module is not available');
+    }
+
+    if (this.isRealtimeActive) {
+      throw new Error('Realtime transcription already active');
+    }
+
+    try {
+      console.log('Starting realtime transcription...');
+      
+      // Use the transcribeRealtime method from the whisper context
+      const { stop, subscribe } = await this.context.transcribeRealtime({
+        language: WHISPER_CONFIG.language,
+        temperature: 0.0,
+        bestOf: 1,
+        beamSize: 5,
+        patience: 1.0,
+        lengthPenalty: 1.0,
+        suppressTokens: [-1],
+        suppressBlank: true,
+        temperatureInc: 0.2,
+        entropyThreshold: 2.4,
+        logprobThreshold: -1.0,
+        noSpeechThreshold: 0.6,
+      });
+
+      // Store the stop function for later use
+      this.realtimeTranscriber = { stop };
+
+      // Subscribe to real-time events
+      subscribe((evt: any) => {
+        const { isCapturing, data, processTime, recordingTime } = evt;
+        
+        if (callbacks.onTranscriptionUpdate) {
+          callbacks.onTranscriptionUpdate({
+            text: data.result || '',
+            isFinal: !isCapturing,
+            language: WHISPER_CONFIG.language,
+          });
+        }
+
+        if (!isCapturing && callbacks.onComplete) {
+          callbacks.onComplete({
+            text: data.result || '',
+            language: WHISPER_CONFIG.language,
+            segments: [],
+          });
+        }
+      });
+
+      this.isRealtimeActive = true;
+      console.log('Realtime transcription started successfully');
+      
+    } catch (error) {
+      console.error('Error starting realtime transcription:', error);
+      // Reset the flag on error to prevent stuck state
+      this.isRealtimeActive = false;
+      this.realtimeTranscriber = null;
+      throw error;
+    }
+  }
+
+  async stopRealtimeTranscription(): Promise<void> {
+    if (!this.isRealtimeActive || !this.realtimeTranscriber) {
+      return;
+    }
+
+    try {
+      console.log('Stopping realtime transcription...');
+      await this.realtimeTranscriber.stop();
+      this.realtimeTranscriber = null;
+      this.isRealtimeActive = false;
+      console.log('Realtime transcription stopped');
+    } catch (error) {
+      console.error('Error stopping realtime transcription:', error);
+      throw error;
+    }
+  }
+
+  // Note: feedAudioData is not needed with transcribeRealtime API
+  // The API handles audio input automatically
+
+  getRealtimeStatus(): boolean {
+    return this.isRealtimeActive;
+  }
+
+  // Force reset realtime state if it gets stuck
+  resetRealtimeState(): void {
+    console.log('Resetting realtime transcription state');
+    this.isRealtimeActive = false;
+    this.realtimeTranscriber = null;
   }
 
   isModelLoaded(): boolean {
