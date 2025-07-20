@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { RealtimeTranscriptionResult, whisperService } from '../services/whisperService';
+import { useStores } from './StoreProvider';
 
 interface RealtimeChatInputProps {
   onSendMessage: (text: string) => void;
@@ -24,6 +25,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
   colors,
   placeholder,
 }) => {
+  const { chatSessionStore } = useStores();
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcription, setTranscription] = useState('');
@@ -85,11 +87,18 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
         await whisperService.startRealtimeTranscription({
           onTranscriptionUpdate: (result: RealtimeTranscriptionResult) => {
             setTranscription(result.text);
+            // Update transcription in chat session store
+            chatSessionStore.updateTranscriptionMessage(result.text, result.isFinal);
+            
             if (result.isFinal && result.text.trim()) {
               // Auto-send when transcription is final and has content
               setTimeout(() => {
                 onSendMessage(result.text.trim());
                 setTranscription('');
+                // Clear the transcription message from store
+                chatSessionStore.clearTranscriptionMessage();
+                // Mark that we've already sent a message to prevent duplicate
+                recording.current = false;
               }, 1000); // Small delay to show final result
             }
           },
@@ -135,6 +144,9 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
     setIsRecording(false);
     recording.current = false;
     
+    // Clear transcription message from store
+    chatSessionStore.clearTranscriptionMessage();
+    
     // Clear the audio feeding interval
     if (audioInterval.current) {
       clearInterval(audioInterval.current);
@@ -163,8 +175,8 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
         console.log('Real-time transcription was not active:', error);
       }
       
-      // Process the recorded audio file
-      if (audioFile) {
+      // Only process the recorded audio file if real-time transcription didn't already send a message
+      if (audioFile && !transcription.trim()) {
         setIsTranscribing(true);
         try {
           const result = await whisperService.transcribe(audioFile);
@@ -213,9 +225,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
             <Text style={[styles.statusText, { color: colors.primary }]}>Transcribing...</Text>
           </View>
         )}
-        {transcription ? (
-          <Text style={[styles.transcriptionText, { color: colors.text }]}>{transcription}</Text>
-        ) : null}
+
       </View>
     </View>
   );
@@ -259,12 +269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
-  transcriptionText: {
-    fontSize: 16,
-    marginLeft: 12,
-    fontStyle: 'italic',
-    maxWidth: 180,
-  },
+
 });
 
 export default RealtimeChatInput; 

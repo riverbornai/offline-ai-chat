@@ -17,7 +17,7 @@ export interface ChatMessage {
   author: 'user' | 'assistant';
   timestamp: number;
   language?: string;
-  type?: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay';
+  type?: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay' | 'transcription';
 }
 
 export interface ChatSession {
@@ -165,6 +165,57 @@ class ChatSessionStore {
     } else {
       console.log('Message not found with ID:', messageId);
     }
+  };
+
+  // Add real-time transcription message handling
+  updateTranscriptionMessage = (text: string, isFinal: boolean = false) => {
+    if (!this.activeSession) return;
+
+    // Find existing transcription message (temporary message)
+    const transcriptionMessageIndex = this.activeSession.messages.findIndex(
+      m => m.author === 'user' && m.type === 'transcription'
+    );
+
+    if (transcriptionMessageIndex >= 0) {
+      // Update existing transcription message
+      runInAction(() => {
+        this.activeSession!.messages[transcriptionMessageIndex].text = text;
+        this.activeSession!.messages[transcriptionMessageIndex].timestamp = Date.now();
+        
+        // If final, convert to regular conversation message
+        if (isFinal) {
+          this.activeSession!.messages[transcriptionMessageIndex].type = 'conversation';
+        }
+        
+        this.activeSession!.updatedAt = Date.now();
+      });
+    } else {
+      // Create new transcription message
+      const newMessage: ChatMessage = {
+        id: generateId(),
+        text: text,
+        author: 'user',
+        timestamp: Date.now(),
+        type: isFinal ? 'conversation' : 'transcription',
+      };
+
+      runInAction(() => {
+        this.activeSession!.messages.push(newMessage);
+        this.activeSession!.updatedAt = Date.now();
+      });
+    }
+  };
+
+  // Clear transcription message when recording stops
+  clearTranscriptionMessage = () => {
+    if (!this.activeSession) return;
+
+    runInAction(() => {
+      this.activeSession!.messages = this.activeSession!.messages.filter(
+        m => !(m.author === 'user' && m.type === 'transcription')
+      );
+      this.activeSession!.updatedAt = Date.now();
+    });
   };
 
   deleteMessage = (messageId: string) => {
