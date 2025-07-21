@@ -110,10 +110,15 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
             // Update transcription in chat session store
             chatSessionStore.updateTranscriptionMessage(result.text, result.isFinal);
             
-            if (result.isFinal && result.text.trim() && !messageSent.current) {
+            let cleaned = result.text.replace(/\[BLANK_AUDIO\]/gi, '').trim();
+            if (
+              result.isFinal &&
+              cleaned &&
+              !messageSent.current
+            ) {
               messageSent.current = true;
               setTimeout(() => {
-                onSendMessage(result.text.trim());
+                onSendMessage(cleaned);
                 setTranscription('');
                 // Clear the transcription message from store
                 chatSessionStore.clearTranscriptionMessage();
@@ -186,9 +191,6 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
     
     setIsRecording(false);
     recording.current = false;
-    
-    // Clear transcription message from store
-    chatSessionStore.clearTranscriptionMessage();
     
     // Clear the audio feeding interval
     if (audioInterval.current) {

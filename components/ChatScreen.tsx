@@ -94,7 +94,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   }, [chatSessionStore.currentMessages.length, chatSessionStore.currentMessages]);
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    let cleaned = text.replace(/\[BLANK_AUDIO\]/gi, '').trim();
+    if (!cleaned || isLoading) return;
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
       const errorMessage = hasDownloadedModel 

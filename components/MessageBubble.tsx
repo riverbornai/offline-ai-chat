@@ -82,7 +82,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             },
           ]}
         >
-          {message.text}
+          {message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim() || null}
           {message.type === 'transcription' && '...'}
         </Text>
         
