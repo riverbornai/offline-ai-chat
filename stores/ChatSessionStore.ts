@@ -181,12 +181,7 @@ class ChatSessionStore {
       runInAction(() => {
         this.activeSession!.messages[transcriptionMessageIndex].text = text;
         this.activeSession!.messages[transcriptionMessageIndex].timestamp = Date.now();
-        
-        // If final, convert to regular conversation message
-        if (isFinal) {
-          this.activeSession!.messages[transcriptionMessageIndex].type = 'conversation';
-        }
-        
+        // Do NOT convert to 'conversation' type
         this.activeSession!.updatedAt = Date.now();
       });
     } else {
@@ -196,7 +191,7 @@ class ChatSessionStore {
         text: text,
         author: 'user',
         timestamp: Date.now(),
-        type: isFinal ? 'conversation' : 'transcription',
+        type: 'transcription', // always 'transcription'
       };
 
       runInAction(() => {
