@@ -1,13 +1,13 @@
 import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -94,8 +94,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   }, [chatSessionStore.currentMessages.length, chatSessionStore.currentMessages]);
 
   const handleSendMessage = async (text: string) => {
-    let cleaned = text.replace(/\[BLANK_AUDIO\]/gi, '').trim();
-    if (!cleaned || isLoading) return;
+    const cleaned = text.trim();
+    if (!cleaned || cleaned === '[BLANK_AUDIO]' || isLoading) return;
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
       const errorMessage = hasDownloadedModel 
@@ -217,8 +217,11 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
           <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
           <Text style={[styles.welcomeText, { color: colors.text }]}>To get started, you need to download and load a language model.</Text>
-          <Text style={[styles.welcomeText, { color: colors.muted }]}>📱 Go to the "Models" tab to download the Phi-2 Q4_K_M (1.7GB) model</Text>
-          <Text style={[styles.welcomeText, { color: colors.muted }]}>⚡ Once downloaded, tap "Load Model" to start chatting!</Text>
+          {modelStore.models.map((model) => (
+            <Text key={model.id} style={[styles.welcomeText, { color: colors.muted }]}>📱 {model.name} ({model.size})</Text>
+          ))}         
+          
+           <Text style={[styles.welcomeText, { color: colors.muted }]}>⚡ Once downloaded, tap "Load Model" to start chatting!</Text>
         </View>
       );
     }
@@ -234,7 +237,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     return (
       <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
         <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
-        <Text style={[styles.welcomeText, { color: colors.text }]}>Start chatting below! (Powered by Phi-2 Q4_K_M 1.7GB)</Text>
+        <Text style={[styles.welcomeText, { color: colors.text }]}>Start chatting below! {modelStore.activeModel ? `(${modelStore.activeModel.name} ${modelStore.activeModel.size ? `- ${modelStore.activeModel.size}` : ''})` : ''}</Text>
       </View>
     );
   };
