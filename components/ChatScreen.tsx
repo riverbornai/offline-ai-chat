@@ -108,11 +108,18 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       });
       return;
     }
-    chatSessionStore.addMessage({
-      text: text.trim(),
-      author: 'user',
-      type: 'conversation',
-    });
+    // Only add if the last message isn't already the same user message
+    const lastMsg = chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1];
+    if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === text.trim() && lastMsg.type === 'transcription') {
+      // Convert transcription message to conversation
+      lastMsg.type = 'conversation';
+    } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== text.trim()) {
+      chatSessionStore.addMessage({
+        text: text.trim(),
+        author: 'user',
+        type: 'conversation',
+      });
+    }
     setIsLoading(true);
     chatSessionStore.setIsGenerating(true);
     let accumulatedResponse = '';
