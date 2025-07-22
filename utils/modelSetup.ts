@@ -14,17 +14,20 @@ interface AvailableModelConfig {
   filename: string;
   displayName: string;
   isLocal: boolean;
+  expectedSize: number; // Added expectedSize
 }
-const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
+export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
   'phi3-mini-4k-instruct': {
     filename: 'phi-3-mini-4k-instruct-q4.gguf',
-    displayName: 'Phi-3 Mini 4K Instruct (1.8GB)',
-    isLocal: false
+    displayName: 'Phi-3 Mini 4K Instruct (2.2GB)',
+    isLocal: false,
+    expectedSize: 2.2 * 1024 * 1024 * 1024 // 2.2GB in bytes
   },
   'tinyllama-1.1b-chat-v1.0-q4_k_m': {
     filename: 'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
-    displayName: 'TinyLlama-1.1B Chat v1.0 Q4_K_M (430MB)',
-    isLocal: false
+    displayName: 'TinyLlama-1.1B Chat v1.0 Q4_K_M (638MB)',
+    isLocal: false,
+    expectedSize: 638 * 1024 * 1024 // 638MB in bytes
   }
 };
 
@@ -59,9 +62,12 @@ export const setupModels = async (progress?: SetupProgress) => {
     for (const modelId of Object.keys(AVAILABLE_MODELS)) {
       const config = AVAILABLE_MODELS[modelId];
       const ready = await checkModelFileExists(config.filename, progress?.onProgress);
-      if (ready) {
+      const fullyDownloaded = await isModelFullyDownloaded(config.filename, config.expectedSize);
+      if (ready && fullyDownloaded) {
         progress?.onProgress?.(`Initializing ${config.displayName} model...`);
         await initializeModel(modelId, progress);
+      } else if (ready && !fullyDownloaded) {
+        progress?.onError?.(`${config.displayName} is not fully downloaded. Please resume download.`);
       } else {
         progress?.onProgress?.(`${config.displayName} model not found. Please download it first using the Models tab.`);
       }
@@ -105,6 +111,13 @@ const setupDownloadableModel = async (modelId: string, filename: string, progres
   }
 };
 
+// Add this helper
+const isModelFullyDownloaded = async (filename: string, expectedSize: number): Promise<boolean> => {
+  const info = await getModelFileInfo(filename);
+  const TOLERANCE = 1 * 1024 * 1024; // 1MB
+  return !!info && info.exists && info.size >= (expectedSize - TOLERANCE);
+};
+
 // Download and set up model
 export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODELS, progress?: SetupProgress) => {
   const config = AVAILABLE_MODELS[modelId];
@@ -123,7 +136,7 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
     );
 
     // Update model store
-    await modelStore.setModelPath(modelId, config.filename);
+    await modelStore.setModelPath(modelId, String(config.filename));
     
     progress?.onSuccess?.(`${config.displayName} downloaded and ready!`);
     

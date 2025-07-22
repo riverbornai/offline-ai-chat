@@ -109,30 +109,75 @@ export const downloadModelToStorage = async (
     // Ensure model directory exists
     await ensureModelDirectories();
 
-    // Check if file already exists in storage
+    // Check if file already exists in storage and get its size
     const fileInfo = await FileSystem.getInfoAsync(modelPath);
-    if (fileInfo.exists) {
+    let existingSize = 0;
+    if (fileInfo.exists && fileInfo.size) {
+      existingSize = fileInfo.size;
+    }
+
+    // Get expected size from model config (fallback to 0 if not found)
+    let expectedSize = 0;
+    if (filename.includes('phi-3')) expectedSize = 2.2 * 1024 * 1024 * 1024;
+    if (filename.includes('tinyllama')) expectedSize = 638 * 1024 * 1024;
+
+    // If file is already fully downloaded, return
+    if (fileInfo.exists && existingSize >= expectedSize && expectedSize > 0) {
       onStatusUpdate?.(`Model already exists in storage`);
+      onProgress?.(1);
       return modelPath;
     }
 
-    onStatusUpdate?.(`Downloading ${filename}...`);
-    
-    // Download the model file
+    // If partial file exists, resume download using HTTP Range
+    let headers: any = {};
+    if (existingSize > 0 && expectedSize > 0 && existingSize < expectedSize) {
+      headers['Range'] = `bytes=${existingSize}-`;
+      onStatusUpdate?.(`Resuming download from ${existingSize} bytes...`);
+    } else {
+      onStatusUpdate?.(`Downloading ${filename}...`);
+    }
+
+    // Always download directly to modelPath
+    const destPath = modelPath;
+
     const downloadResumable = FileSystem.createDownloadResumable(
       downloadUrl,
-      modelPath,
-      {},
+      destPath,
+      { headers },
       (downloadProgress) => {
-        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+        // Progress: (existing + new) / expected
+        const written = downloadProgress.totalBytesWritten;
+        const total = downloadProgress.totalBytesExpectedToWrite;
+        let progress = 0;
+        if (existingSize > 0 && expectedSize > 0) {
+          progress = (existingSize + written) / expectedSize;
+        } else if (expectedSize > 0) {
+          progress = written / expectedSize;
+        } else {
+          progress = written / total;
+        }
         onProgress?.(progress);
       }
     );
 
     const result = await downloadResumable.downloadAsync();
-    
-    if (result && result.status === 200) {
+
+    if (result && result.status === 206) {
+      // Partial content, resume worked
       onStatusUpdate?.(`Model downloaded successfully`);
+      onProgress?.(1);
+      return modelPath;
+    } else if (result && result.status === 200) {
+      // Server ignored Range, sent full file
+      if (existingSize > 0) {
+        // We tried to resume, but server sent full file. Delete and re-download.
+        await FileSystem.deleteAsync(modelPath, { idempotent: true });
+        onStatusUpdate?.('Server does not support resume. Restarting download...');
+        // Start fresh
+        return await downloadModelToStorage(filename, onProgress, onStatusUpdate);
+      }
+      onStatusUpdate?.(`Model downloaded successfully`);
+      onProgress?.(1);
       return modelPath;
     } else {
       throw new Error(`Failed to download model: ${result?.status || 'Unknown error'}`);
