@@ -55,7 +55,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const scrollViewRef = useRef<ScrollView>(null);
   const [ttsBuffer, setTtsBuffer] = useState('');
   const ttsRef = useRef('');
-  let ttsSpeaking = false;
+  const ttsQueue = useRef<string[]>([]);
+  const ttsSpeakingRef = useRef(false);
   const [isWhisperLoading, setIsWhisperLoading] = useState(!whisperService.isModelLoaded());
   const [whisperError, setWhisperError] = useState<string | null>(null);
 
@@ -84,6 +85,28 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         });
     }
     return () => { mounted = false; };
+  }, []);
+
+  const speakNextSentence = () => {
+    if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
+      const nextSentence = ttsQueue.current.shift();
+      if (nextSentence) {
+        ttsSpeakingRef.current = true;
+        Tts.speak(nextSentence);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Attach the event listener once
+    const finishListener = () => {
+      ttsSpeakingRef.current = false;
+      speakNextSentence();
+    };
+    Tts.addEventListener('tts-finish', finishListener);
+    return () => {
+      Tts.removeEventListener('tts-finish', finishListener);
+    };
   }, []);
 
   // Auto-scroll to bottom when new messages arrive
@@ -164,21 +187,21 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
             // TTS streaming logic
             ttsRef.current += token;
-            // Only speak when you have a full sentence or a long enough chunk
-            if (/[.!?]\s$/.test(ttsRef.current) || ttsRef.current.length > 30) {
-              const toSpeak = ttsRef.current.trim();
-              // Only speak if not just punctuation or whitespace
-              if (toSpeak && !/^[\s.,!?;:]+$/.test(toSpeak) && !ttsSpeaking) {
-                ttsSpeaking = true;
-                Tts.speak(toSpeak);
-                ttsRef.current = '';
-                Tts.addEventListener('tts-finish', () => {
-                  ttsSpeaking = false;
-                });
-              } else {
-                ttsRef.current = '';
+            // Regex for complete sentences
+            const sentenceRegex = /([^.?!]+[.?!]+["')\]]*\s*)/g;
+            let match;
+            let lastIndex = 0;
+            while ((match = sentenceRegex.exec(ttsRef.current)) !== null) {
+              const sentence = match[0].trim();
+              if (sentence && !/^[\s.,!?;:]+$/.test(sentence)) {
+                ttsQueue.current.push(sentence);
+                lastIndex = sentenceRegex.lastIndex;
               }
             }
+            if (lastIndex > 0) {
+              ttsRef.current = ttsRef.current.slice(lastIndex);
+            }
+            speakNextSentence();
           }
         }
       );
