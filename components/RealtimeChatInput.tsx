@@ -36,7 +36,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
   const recordingRef = useRef<Audio.Recording | null>(null);
   const audioInterval = useRef<number | null>(null);
   const silenceThreshold = 0.01; // Adjust as needed
-  const silenceDuration = 2000; // ms
+  const silenceDuration = 1000; // ms
   const silenceTimer = useRef<any>(null);
   const messageSent = useRef(false); // Prevent duplicate message sending
 
