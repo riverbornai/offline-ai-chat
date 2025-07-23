@@ -117,8 +117,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   }, [chatSessionStore.currentMessages.length, chatSessionStore.currentMessages]);
 
   const handleSendMessage = async (text: string) => {
-    const cleaned = text.trim();
-    if (!cleaned || cleaned === '[BLANK_AUDIO]' || isLoading) return;
+    // Always clean the text before any logic
+    let cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
+    if (!cleaned || isLoading) return;
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
       const errorMessage = hasDownloadedModel 
@@ -133,12 +134,12 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     }
     // Only add if the last message isn't already the same user message
     const lastMsg = chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1];
-    if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === text.trim() && lastMsg.type === 'transcription') {
+    if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === cleaned && lastMsg.type === 'transcription') {
       // Convert transcription message to conversation
       lastMsg.type = 'conversation';
-    } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== text.trim()) {
+    } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== cleaned) {
       chatSessionStore.addMessage({
-        text: text.trim(),
+        text: cleaned,
         author: 'user',
         type: 'conversation',
       });
@@ -159,7 +160,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       };
       const promptBuilder = new ConversationPromptBuilder(conversationContext);
       const prompt = promptBuilder.buildPrompt(
-        text,
+        cleaned,
         chatSessionStore.currentMessages
       );
       const assistantMessage = chatSessionStore.addMessage({

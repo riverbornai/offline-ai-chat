@@ -117,14 +117,11 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
               !messageSent.current
             ) {
               messageSent.current = true;
-              setTimeout(() => {
-                onSendMessage(cleaned);
-                setTranscription('');
-                // Clear the transcription message from store
-                chatSessionStore.clearTranscriptionMessage();
-                // Mark that we've already sent a message to prevent duplicate
-                recording.current = false;
-              }, 1000); // Small delay to show final result
+              // Clear the transcription message BEFORE sending the final message
+              chatSessionStore.clearTranscriptionMessage();
+              onSendMessage(cleaned);
+              setTranscription('');
+              recording.current = false;
             }
           },
           onError: (error: Error) => {
