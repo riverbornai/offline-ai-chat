@@ -336,7 +336,7 @@ const ModelsScreen: React.FC = observer(() => {
               onPress={() => handleDownloadWithRefresh(model.id, refreshFileInfo)}
               disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
             >
-              <Text style={[styles.buttonText, { color: colors.surface }]}>Retry Download</Text>
+              <Text style={[styles.buttonText, { color: colors.surface }]}>🔄 Download Again</Text>
             </TouchableOpacity>
           ) : (!ready ? (
             <TouchableOpacity
