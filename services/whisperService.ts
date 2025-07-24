@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
+import { downloadModelToStorage, getModelFilePath } from '../utils/platformPaths';
 
 // Import whisper.rn - this will throw if not available
 let initWhisper: any = null;
@@ -58,7 +59,7 @@ class WhisperService {
       
       if (!modelExists) {
         console.log('Model not found, downloading...');
-        await this.downloadModel();
+        await this.downloadModel(); // Wait for download to finish before loading model
       }
       
       // Initialize Whisper context
@@ -92,35 +93,31 @@ class WhisperService {
   }
 
   private async downloadModel(): Promise<void> {
-    try {
-      console.log('Downloading model from:', WHISPER_CONFIG.modelUrl);
-      
-      // Create models directory in documents
-      const modelsDir = `${FileSystem.documentDirectory}models/`;
-      await FileSystem.makeDirectoryAsync(modelsDir, { intermediates: true });
-      
-      // Download model
-      const downloadResumable = FileSystem.createDownloadResumable(
-        WHISPER_CONFIG.modelUrl,
-        `${modelsDir}${WHISPER_CONFIG.modelName}`,
-        {},
-        (downloadProgress) => {
-          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-          console.log(`Download progress: ${(progress * 100).toFixed(1)}%`);
-        }
-      );
-
-      const result = await downloadResumable.downloadAsync();
-      if (result?.status === 200) {
-        this.modelPath = result.uri;
-        console.log('Model downloaded successfully to:', result.uri);
-      } else {
-        throw new Error('Failed to download model');
+    const maxRetries = 3;
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        console.log(`Downloading model from: ${WHISPER_CONFIG.modelUrl} (attempt ${attempt + 1})`);
+        await downloadModelToStorage(
+          WHISPER_CONFIG.modelName,
+          (progress) => {
+            console.log(`Download progress: ${(progress * 100).toFixed(1)}%`);
+          },
+          (status) => {
+            console.log(status);
+          }
+        );
+        // Set modelPath after download
+        const modelPath = await getModelFilePath(WHISPER_CONFIG.modelName);
+        this.modelPath = modelPath;
+        return; // Success!
+      } catch (error) {
+        attempt++;
+        console.error(`Error downloading model (attempt ${attempt}):`, error);
+        if (attempt >= maxRetries) throw error;
+        // Wait 2 seconds before retrying
+        await new Promise(res => setTimeout(res, 2000));
       }
-      
-    } catch (error) {
-      console.error('Error downloading model:', error);
-      throw error;
     }
   }
 

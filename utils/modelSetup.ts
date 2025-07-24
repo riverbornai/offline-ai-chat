@@ -120,7 +120,7 @@ const isModelFullyDownloaded = async (filename: string, expectedSize: number): P
 };
 
 // Download and set up model
-export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODELS, progress?: SetupProgress) => {
+export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODELS, progress?: SetupProgress, resume: boolean = false) => {
   const config = AVAILABLE_MODELS[modelId];
   if (!config) {
     throw new Error(`Model ${modelId} not found`);
@@ -129,25 +129,30 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
   try {
     progress?.onProgress?.(`Starting download of ${config.displayName}...`);
 
-    // Check for existing background download
-    const existingTasks = await RNBackgroundDownloader.checkForExistingDownloads();
-    const task = existingTasks.find(t => t.id === config.filename);
-    if (task && task.state !== 'DONE' && task.state !== 'FAILED') {
-      // Attach handlers to existing task
-      task
-        .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
-          if (bytesTotal > 0) progress?.onDownloadProgress?.(bytesDownloaded / bytesTotal);
-        })
-        .done(() => {
-          progress?.onSuccess?.(`${config.displayName} downloaded and ready!`);
-        })
-        .error(({ error }: ErrorHandlerObject) => {
-          progress?.onError?.(`Failed to download ${config.displayName}: ${error}`);
-        });
-      // Show current progress immediately
-      if (task.bytesTotal > 0) progress?.onDownloadProgress?.(task.bytesDownloaded / task.bytesTotal);
-      progress?.onProgress?.('Resuming background download...');
-      return;
+    if (resume) {
+      // Try to resume existing download
+      const existingTasks = await RNBackgroundDownloader.checkForExistingDownloads();
+      const task = existingTasks.find(t => t.id === config.filename);
+      if (task && task.state !== 'DONE' && task.state !== 'FAILED') {
+        // Attach handlers to existing task
+        task
+          .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+            if (bytesTotal > 0) progress?.onDownloadProgress?.(bytesDownloaded / bytesTotal);
+          })
+          .done(() => {
+            progress?.onSuccess?.(`${config.displayName} downloaded and ready!`);
+          })
+          .error(({ error }: ErrorHandlerObject) => {
+            progress?.onError?.(`Failed to download ${config.displayName}: ${error}`);
+          });
+        // Show current progress immediately
+        if (task.bytesTotal > 0) progress?.onDownloadProgress?.(task.bytesDownloaded / task.bytesTotal);
+        progress?.onProgress?.('Resuming background download...');
+        return;
+      } else {
+        progress?.onError?.('No resumable download found. Please start a new download.');
+        throw new Error('No resumable download found.');
+      }
     }
 
     // Download the model
@@ -279,8 +284,8 @@ export const getModelStatus = async () => {
 };
 
 // Download model function
-export const downloadModel = async (modelId: keyof typeof AVAILABLE_MODELS, progress?: SetupProgress) => {
-  return await downloadAndSetupModel(modelId, progress);
+export const downloadModel = async (modelId: keyof typeof AVAILABLE_MODELS, progress?: SetupProgress, resume: boolean = false) => {
+  return await downloadAndSetupModel(modelId, progress, resume);
 };
 
 // Get available models for download

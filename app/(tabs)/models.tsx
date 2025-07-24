@@ -113,53 +113,58 @@ const ModelsScreen: React.FC = observer(() => {
     }
   };
 
-  const handleDownload = async (modelId: string) => {
+  const handleDownload = async (modelId: string, resume: boolean = false) => {
     try {
       setDownloadingModelId(modelId);
       setSetupMessage('');
       setSetupStatus('progress');
       setDownloadProgress(0);
       setLastFailedModelId(null);
-      // Delete any partial file before starting download
       const config = AVAILABLE_MODELS[modelId];
-      if (config) {
+      if (config && !resume) {
         const { deleteModelFile } = await import('../../utils/platformPaths');
         await deleteModelFile(config.filename);
       }
-      await downloadModel(modelId as any, {
-        onProgress: (message) => {
-          setSetupMessage(message);
-          setSetupStatus('progress');
-        },
-        onDownloadProgress: (progress) => {
-          setDownloadProgress(progress);
-        },
-        onSuccess: (message) => {
-          setSetupMessage(message);
-          setSetupStatus('success');
-          setDownloadProgress(1);
-          setTimeout(() => {
-            setSetupStatus('idle');
-            setSetupMessage('');
+      await downloadModel(
+        modelId as any,
+        {
+          onProgress: (message) => {
+            setSetupMessage(message);
+            setSetupStatus('progress');
+          },
+          onDownloadProgress: (progress) => {
+            setDownloadProgress(progress);
+          },
+          onSuccess: (message) => {
+            setSetupMessage(message);
+            setSetupStatus('success');
+            setDownloadProgress(1);
+            setTimeout(() => {
+              setSetupStatus('idle');
+              setSetupMessage('');
+              setDownloadProgress(0);
+              setDownloadingModelId(null);
+            }, 3000);
+          },
+          onError: (message) => {
+            setSetupMessage(message);
+            setSetupStatus('error');
             setDownloadProgress(0);
-            setDownloadingModelId(null);
-          }, 3000);
+            setLastFailedModelId(modelId);
+          }
         },
-        onError: (message) => {
-          setSetupMessage(message);
-          setSetupStatus('error');
-          setDownloadProgress(0);
-          setLastFailedModelId(modelId); // Track which model failed
-          // No timeout here, let user retry
-        }
-      });
+        resume
+      );
     } catch (error) {
       setSetupMessage(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setSetupStatus('error');
       setDownloadProgress(0);
       setLastFailedModelId(modelId);
-      // No timeout here, let user retry
     }
+  };
+
+  const handleRetryDownload = async (modelId: string) => {
+    await handleDownload(modelId, true);
   };
 
   const handleQuickSetup = async () => {
@@ -242,34 +247,37 @@ const ModelsScreen: React.FC = observer(() => {
           const { deleteModelFile } = await import('../../utils/platformPaths');
           await deleteModelFile(config.filename);
         }
-        await downloadModel(modelId as any, {
-          onProgress: (message) => {
-            setSetupMessage(message);
-            setSetupStatus('progress');
-          },
-          onDownloadProgress: (progress) => {
-            setDownloadProgress(progress);
-          },
-          onSuccess: (message) => {
-            setSetupMessage(message);
-            setSetupStatus('success');
-            setDownloadProgress(1);
-            if (afterSuccess) afterSuccess();
-            setTimeout(() => {
-              setSetupStatus('idle');
-              setSetupMessage('');
+        await downloadModel(
+          modelId as any,
+          {
+            onProgress: (message) => {
+              setSetupMessage(message);
+              setSetupStatus('progress');
+            },
+            onDownloadProgress: (progress) => {
+              setDownloadProgress(progress);
+            },
+            onSuccess: (message) => {
+              setSetupMessage(message);
+              setSetupStatus('success');
+              setDownloadProgress(1);
+              if (afterSuccess) afterSuccess();
+              setTimeout(() => {
+                setSetupStatus('idle');
+                setSetupMessage('');
+                setDownloadProgress(0);
+                setDownloadingModelId(null);
+              }, 3000);
+            },
+            onError: (message) => {
+              setSetupMessage(message);
+              setSetupStatus('error');
               setDownloadProgress(0);
-              setDownloadingModelId(null);
-            }, 3000);
-          },
-          onError: (message) => {
-            setSetupMessage(message);
-            setSetupStatus('error');
-            setDownloadProgress(0);
-            setLastFailedModelId(modelId); // Track which model failed
-            // No timeout here, let user retry
+              setLastFailedModelId(modelId); // Track which model failed
+              // No timeout here, let user retry
+            }
           }
-        });
+        );
       } catch (error) {
         setSetupMessage(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setSetupStatus('error');
@@ -466,7 +474,7 @@ const ModelsScreen: React.FC = observer(() => {
             {setupStatus === 'error' && lastFailedModelId && (
               <TouchableOpacity
                 style={{ marginLeft: 12, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primary, borderRadius: 8 }}
-                onPress={() => handleDownload(lastFailedModelId)}
+                onPress={() => handleRetryDownload(lastFailedModelId)}
               >
                 <Text style={{ color: colors.surface, fontWeight: 'bold' }}>Retry</Text>
               </TouchableOpacity>
