@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
 import { useStores } from '../../components/StoreProvider';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
@@ -31,10 +32,53 @@ const ModelsScreen: React.FC = observer(() => {
   const [partialDownloadInfo, setPartialDownloadInfo] = useState<{ [modelId: string]: number }>({});
 
   React.useEffect(() => {
-    // On mount, check for partial downloads
+    // On mount, check for in-progress downloads and attach handlers
     (async () => {
-      // Remove partial download check logic
-      // No need to setPartialDownloadInfo
+      const tasks = await RNBackgroundDownloader.checkForExistingDownloads();
+      const inProgressTask = tasks.find(
+        t => t.state !== 'DONE' && t.state !== 'FAILED'
+      );
+      if (inProgressTask) {
+        // Map task id (filename) to model id
+        const modelEntry = Object.entries(AVAILABLE_MODELS).find(
+          ([modelId, config]) => config.filename === inProgressTask.id
+        );
+        if (modelEntry) {
+          const [modelId] = modelEntry;
+          setDownloadingModelId(modelId); // Use modelId, not filename!
+          // Show current progress immediately
+          if (inProgressTask.bytesTotal > 0) {
+            setDownloadProgress(inProgressTask.bytesDownloaded / inProgressTask.bytesTotal);
+          }
+          setSetupStatus('progress');
+          setSetupMessage('Resuming background download...');
+          // Attach handlers
+          inProgressTask
+            .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+              if (bytesTotal > 0) setDownloadProgress(bytesDownloaded / bytesTotal);
+            })
+            .done(() => {
+              setSetupStatus('success');
+              setSetupMessage('Model downloaded successfully!');
+              setDownloadProgress(1);
+              // Update MobX model state so UI shows the initialize button
+              if (modelStore && typeof modelStore.setModelPath === 'function') {
+                modelStore.setModelPath(modelId, AVAILABLE_MODELS[modelId].filename);
+              }
+              setTimeout(() => {
+                setSetupStatus('idle');
+                setSetupMessage('');
+                setDownloadProgress(0);
+                setDownloadingModelId(null);
+              }, 3000);
+            })
+            .error(({ error }: ErrorHandlerObject) => {
+              setSetupStatus('error');
+              setSetupMessage(`Download failed: ${error}`);
+              setDownloadProgress(0);
+            });
+        }
+      }
     })();
   }, [modelStore.models.length]);
 

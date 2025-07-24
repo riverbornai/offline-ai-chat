@@ -1,3 +1,4 @@
+import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
 import { modelStore } from '../stores/ModelStore';
 import {
   checkModelAvailableForDownload,
@@ -127,7 +128,28 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
 
   try {
     progress?.onProgress?.(`Starting download of ${config.displayName}...`);
-    
+
+    // Check for existing background download
+    const existingTasks = await RNBackgroundDownloader.checkForExistingDownloads();
+    const task = existingTasks.find(t => t.id === config.filename);
+    if (task && task.state !== 'DONE' && task.state !== 'FAILED') {
+      // Attach handlers to existing task
+      task
+        .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+          if (bytesTotal > 0) progress?.onDownloadProgress?.(bytesDownloaded / bytesTotal);
+        })
+        .done(() => {
+          progress?.onSuccess?.(`${config.displayName} downloaded and ready!`);
+        })
+        .error(({ error }: ErrorHandlerObject) => {
+          progress?.onError?.(`Failed to download ${config.displayName}: ${error}`);
+        });
+      // Show current progress immediately
+      if (task.bytesTotal > 0) progress?.onDownloadProgress?.(task.bytesDownloaded / task.bytesTotal);
+      progress?.onProgress?.('Resuming background download...');
+      return;
+    }
+
     // Download the model
     const modelPath = await downloadModelToStorage(
       config.filename,
@@ -136,10 +158,10 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
     );
 
     // Update model store
-    await modelStore.setModelPath(modelId, String(config.filename));
-    
+    await modelStore.setModelPath(String(modelId), String(config.filename));
+
     progress?.onSuccess?.(`${config.displayName} downloaded and ready!`);
-    
+
     return modelPath;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
