@@ -22,13 +22,13 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
     filename: 'phi-3-mini-4k-instruct-q4.gguf',
     displayName: 'Phi-3 Mini 4K Instruct (2.2GB)',
     isLocal: false,
-    expectedSize: 2.2 * 1024 * 1024 * 1024 // 2.2GB in bytes
+    expectedSize: 2.2 * 1024 * 1024 * 1024 // 2.2GB in bytes (browser verified)
   },
   'tinyllama-1.1b-chat-v1.0-q4_k_m': {
     filename: 'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
     displayName: 'TinyLlama-1.1B Chat v1.0 Q4_K_M (638MB)',
     isLocal: false,
-    expectedSize: 638 * 1024 * 1024 // 638MB in bytes
+    expectedSize: 638 * 1024 * 1024 // 638MB in bytes (browser verified)
   }
 };
 
@@ -115,7 +115,7 @@ const setupDownloadableModel = async (modelId: string, filename: string, progres
 // Add this helper
 const isModelFullyDownloaded = async (filename: string, expectedSize: number): Promise<boolean> => {
   const info = await getModelFileInfo(filename);
-  const TOLERANCE = 1 * 1024 * 1024; // 1MB
+  const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
   return !!info && info.exists && info.size >= (expectedSize - TOLERANCE);
 };
 

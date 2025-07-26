@@ -16,7 +16,7 @@ import { useStores } from '../../components/StoreProvider';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { AVAILABLE_MODELS, downloadModel, isModelReady, quickSetup } from '../../utils/modelSetup';
-import { getModelFileInfo } from '../../utils/platformPaths';
+import { formatBytes, getModelFileInfo } from '../../utils/platformPaths';
 
 const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
@@ -34,50 +34,83 @@ const ModelsScreen: React.FC = observer(() => {
   React.useEffect(() => {
     // On mount, check for in-progress downloads and attach handlers
     (async () => {
-      const tasks = await RNBackgroundDownloader.checkForExistingDownloads();
-      const inProgressTask = tasks.find(
-        t => t.state !== 'DONE' && t.state !== 'FAILED'
-      );
-      if (inProgressTask) {
-        // Map task id (filename) to model id
-        const modelEntry = Object.entries(AVAILABLE_MODELS).find(
-          ([modelId, config]) => config.filename === inProgressTask.id
+      try {
+        const tasks = await RNBackgroundDownloader.checkForExistingDownloads();
+        const inProgressTask = tasks.find(
+          t => t.state !== 'DONE' && t.state !== 'FAILED'
         );
-        if (modelEntry) {
-          const [modelId] = modelEntry;
-          setDownloadingModelId(modelId); // Use modelId, not filename!
-          // Show current progress immediately
-          if (inProgressTask.bytesTotal > 0) {
-            setDownloadProgress(inProgressTask.bytesDownloaded / inProgressTask.bytesTotal);
-          }
-          setSetupStatus('progress');
-          setSetupMessage('Resuming background download...');
-          // Attach handlers
-          inProgressTask
-            .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
-              if (bytesTotal > 0) setDownloadProgress(bytesDownloaded / bytesTotal);
-            })
-            .done(() => {
-              setSetupStatus('success');
-              setSetupMessage('Model downloaded successfully!');
-              setDownloadProgress(1);
-              // Update MobX model state so UI shows the initialize button
-              if (modelStore && typeof modelStore.setModelPath === 'function') {
-                modelStore.setModelPath(modelId, AVAILABLE_MODELS[modelId].filename);
-              }
-              setTimeout(() => {
-                setSetupStatus('idle');
-                setSetupMessage('');
+        
+        if (inProgressTask) {
+          // Map task id (filename) to model id
+          const modelEntry = Object.entries(AVAILABLE_MODELS).find(
+            ([modelId, config]) => config.filename === inProgressTask.id
+          );
+          if (modelEntry) {
+            const [modelId] = modelEntry;
+            setDownloadingModelId(modelId); // Use modelId, not filename!
+            // Show current progress immediately
+            if (inProgressTask.bytesTotal > 0) {
+              setDownloadProgress(inProgressTask.bytesDownloaded / inProgressTask.bytesTotal);
+            }
+            setSetupStatus('progress');
+            setSetupMessage('Resuming background download...');
+            // Attach handlers
+            inProgressTask
+              .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+                if (bytesTotal > 0) setDownloadProgress(bytesDownloaded / bytesTotal);
+              })
+              .done(async () => {
+                try {
+                  // Verify download completion
+                  const config = AVAILABLE_MODELS[modelId];
+                  const info = await getModelFileInfo(config.filename);
+                  if (info && info.exists && info.size > 50 * 1024 * 1024) {
+                    setSetupStatus('success');
+                    setSetupMessage(`Model downloaded successfully! Final size: ${formatBytes(info.size)}`);
+                    setDownloadProgress(1);
+                    // Update MobX model state so UI shows the initialize button
+                    if (modelStore && typeof modelStore.setModelPath === 'function') {
+                      modelStore.setModelPath(modelId, AVAILABLE_MODELS[modelId].filename);
+                    }
+                  } else {
+                    throw new Error('Downloaded file verification failed');
+                  }
+                } catch (error) {
+                  setSetupStatus('error');
+                  setSetupMessage(`Download verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  setLastFailedModelId(modelId);
+                }
+                setTimeout(() => {
+                  setSetupStatus('idle');
+                  setSetupMessage('');
+                  setDownloadProgress(0);
+                  setDownloadingModelId(null);
+                }, 3000);
+              })
+              .error(({ error }: ErrorHandlerObject) => {
+                setSetupStatus('error');
+                setSetupMessage(`Download failed: ${error}`);
                 setDownloadProgress(0);
-                setDownloadingModelId(null);
-              }, 3000);
-            })
-            .error(({ error }: ErrorHandlerObject) => {
-              setSetupStatus('error');
-              setSetupMessage(`Download failed: ${error}`);
-              setDownloadProgress(0);
-            });
+                setLastFailedModelId(modelId);
+              });
+          }
         }
+        
+        // Also check for completed downloads that might not be recognized by the UI
+        for (const [modelId, config] of Object.entries(AVAILABLE_MODELS)) {
+          const info = await getModelFileInfo(config.filename);
+          if (info && info.exists && info.size > 50 * 1024 * 1024) {
+            const TOLERANCE = 50 * 1024 * 1024;
+            if (info.size >= (config.expectedSize - TOLERANCE)) {
+              // File exists and is complete, update model store
+              if (modelStore && typeof modelStore.setModelPath === 'function') {
+                modelStore.setModelPath(modelId, config.filename);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking existing downloads:', error);
       }
     })();
   }, [modelStore.models.length]);
@@ -87,7 +120,7 @@ const ModelsScreen: React.FC = observer(() => {
     const config = AVAILABLE_MODELS[model.id];
     if (!config) return false;
     const info = await getModelFileInfo(String(config.filename));
-    const TOLERANCE = 1024 * 1024; // 1MB
+    const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
     return !!info && info.exists && info.size >= (config.expectedSize - TOLERANCE);
   };
 
@@ -224,9 +257,19 @@ const ModelsScreen: React.FC = observer(() => {
     // Helper to refresh file info
     const refreshFileInfo = async () => {
       const info = await getModelFileInfo(String(config.filename));
-      setFileExists(!!info && info.exists);
-      const TOLERANCE = 1024 * 1024; // 1MB
-      setFullyDownloaded(!!info && info.exists && info.size >= (expectedSize - TOLERANCE));
+      const fileExists = !!info && info.exists;
+      const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
+      const isComplete = fileExists && info.size >= (expectedSize - TOLERANCE);
+      
+      setFileExists(fileExists);
+      setFullyDownloaded(isComplete);
+      
+      // Update model store if file is complete but not marked as downloaded
+      if (isComplete && !model.isDownloaded) {
+        if (modelStore && typeof modelStore.setModelPath === 'function') {
+          modelStore.setModelPath(model.id, config.filename);
+        }
+      }
     };
 
     React.useEffect(() => {
@@ -499,7 +542,7 @@ const ModelsScreen: React.FC = observer(() => {
             ℹ️ Getting Started
           </Text>
           <Text style={[styles.infoText, { color: colors.text }]}>
-            {`1. Download the Phi-2 Q4_K_M (1.7GB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the AI Chat tab\n4. Release the model when not in use to save memory`}
+            {`1. Download either Phi-3 Mini (2.2GB) or TinyLlama (638MB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the Chat tab\n4. Release the model when not in use to save memory`}
           </Text>
         </View>
       </ScrollView>

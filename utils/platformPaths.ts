@@ -104,9 +104,9 @@ export const downloadModelToStorage = async (
 
   await ensureModelDirectories();
 
-  // Check if file already exists
+  // Check if file already exists and is complete
   const fileInfo = await FileSystem.getInfoAsync(modelPath);
-  if (fileInfo.exists) {
+  if (fileInfo.exists && fileInfo.size && fileInfo.size > 100 * 1024 * 1024) { // > 100MB indicates likely complete
     onStatusUpdate?.('Model already exists in storage');
     onProgress?.(1);
     return modelPath;
@@ -121,17 +121,29 @@ export const downloadModelToStorage = async (
         destination: modelPath.replace('file://', ''),
       })
         .begin(({ expectedBytes }: BeginHandlerObject) => {
-          onStatusUpdate?.('Download started');
+          onStatusUpdate?.(`Download started - Expected size: ${formatBytes(expectedBytes)}`);
         })
         .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
           if (bytesTotal > 0) {
-            onProgress?.(bytesDownloaded / bytesTotal);
+            const progress = bytesDownloaded / bytesTotal;
+            onProgress?.(progress);
+            onStatusUpdate?.(`Downloaded: ${formatBytes(bytesDownloaded)} / ${formatBytes(bytesTotal)} (${Math.round(progress * 100)}%)`);
           }
         })
-        .done(() => {
-          onStatusUpdate?.('Model downloaded successfully');
-          onProgress?.(1);
-          resolve(modelPath);
+        .done(async () => {
+          try {
+            // Verify the file exists and has reasonable size
+            const finalFileInfo = await FileSystem.getInfoAsync(modelPath);
+            if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > 50 * 1024 * 1024) {
+              onStatusUpdate?.(`Model downloaded successfully - Final size: ${formatBytes(finalFileInfo.size)}`);
+              onProgress?.(1);
+              resolve(modelPath);
+            } else {
+              throw new Error('Downloaded file is incomplete or corrupted');
+            }
+          } catch (error) {
+            reject(new Error(`Download verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+          }
         })
         .error(({ error, errorCode }: ErrorHandlerObject) => {
           onStatusUpdate?.('Download failed, will try to resume...');
@@ -142,20 +154,34 @@ export const downloadModelToStorage = async (
               existing
                 .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
                   if (bytesTotal > 0) {
-                    onProgress?.(bytesDownloaded / bytesTotal);
+                    const progress = bytesDownloaded / bytesTotal;
+                    onProgress?.(progress);
+                    onStatusUpdate?.(`Resuming: ${formatBytes(bytesDownloaded)} / ${formatBytes(bytesTotal)} (${Math.round(progress * 100)}%)`);
                   }
                 })
-                .done(() => {
-                  onStatusUpdate?.('Model downloaded successfully (resumed)');
-                  onProgress?.(1);
-                  resolve(modelPath);
+                .done(async () => {
+                  try {
+                    // Verify the resumed download
+                    const finalFileInfo = await FileSystem.getInfoAsync(modelPath);
+                    if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > 50 * 1024 * 1024) {
+                      onStatusUpdate?.(`Model downloaded successfully (resumed) - Final size: ${formatBytes(finalFileInfo.size)}`);
+                      onProgress?.(1);
+                      resolve(modelPath);
+                    } else {
+                      throw new Error('Resumed download is incomplete or corrupted');
+                    }
+                  } catch (error) {
+                    reject(new Error(`Resume verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                  }
                 })
                 .error(({ error, errorCode }: ErrorHandlerObject) => {
-                  reject(new Error(error));
+                  reject(new Error(`Resume failed: ${error}`));
                 });
             } else {
-              reject(new Error(error));
+              reject(new Error(`Initial download failed: ${error}`));
             }
+          }).catch(() => {
+            reject(new Error(`Initial download failed: ${error}`));
           });
         });
     });
