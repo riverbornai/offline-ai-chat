@@ -17,9 +17,10 @@ import { useStores } from './StoreProvider';
 
 import Tts from 'react-native-tts';
 import { whisperService } from '../services/whisperService';
+import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
-import ChatInput from './ChatInput';
 import MessageBubble from './MessageBubble';
+import RealtimeChatInput from './RealtimeChatInput';
 
 // Clean up LLM response by removing unwanted formatting and metadata
 const cleanLLMResponse = (response: string): string => {
@@ -54,7 +55,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const scrollViewRef = useRef<ScrollView>(null);
   const [ttsBuffer, setTtsBuffer] = useState('');
   const ttsRef = useRef('');
-  let ttsSpeaking = false;
+  const ttsQueue = useRef<string[]>([]);
+  const ttsSpeakingRef = useRef(false);
   const [isWhisperLoading, setIsWhisperLoading] = useState(!whisperService.isModelLoaded());
   const [whisperError, setWhisperError] = useState<string | null>(null);
 
@@ -85,6 +87,28 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     return () => { mounted = false; };
   }, []);
 
+  const speakNextSentence = () => {
+    if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
+      const nextSentence = ttsQueue.current.shift();
+      if (nextSentence) {
+        ttsSpeakingRef.current = true;
+        Tts.speak(nextSentence);
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Attach the event listener once
+    const finishListener = () => {
+      ttsSpeakingRef.current = false;
+      speakNextSentence();
+    };
+    Tts.addEventListener('tts-finish', finishListener);
+    return () => {
+      Tts.removeEventListener('tts-finish', finishListener);
+    };
+  }, []);
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollViewRef.current) {
@@ -93,7 +117,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   }, [chatSessionStore.currentMessages.length, chatSessionStore.currentMessages]);
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    // Always clean the text before any logic
+    let cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
+    if (!cleaned || isLoading) return;
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
       const errorMessage = hasDownloadedModel 
@@ -106,19 +132,37 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       });
       return;
     }
-    chatSessionStore.addMessage({
-      text: text.trim(),
-      author: 'user',
-      type: 'conversation',
-    });
+    // Only add if the last message isn't already the same user message
+    const lastMsg = chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1];
+    if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === cleaned && lastMsg.type === 'transcription') {
+      // Convert transcription message to conversation
+      lastMsg.type = 'conversation';
+    } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== cleaned) {
+      chatSessionStore.addMessage({
+        text: cleaned,
+        author: 'user',
+        type: 'conversation',
+      });
+    }
     setIsLoading(true);
     chatSessionStore.setIsGenerating(true);
     let accumulatedResponse = '';
     let tokensReceived = 0;
     let isGenerationComplete = false;
     try {
-      // Simple prompt for conversation
-      const simplePrompt = `User: ${text}\nAssistant:`;
+      // Use ConversationPromptBuilder for advanced prompt
+      const conversationContext = {
+        targetLanguage: chatSessionStore.settings.targetLanguage,
+        nativeLanguage: chatSessionStore.settings.nativeLanguage,
+        learningLevel: chatSessionStore.settings.learningLevel,
+        correctionPreference: chatSessionStore.settings.correctionPreference,
+        topic: topic || '',
+      };
+      const promptBuilder = new ConversationPromptBuilder(conversationContext);
+      const prompt = promptBuilder.buildPrompt(
+        cleaned,
+        chatSessionStore.currentMessages
+      );
       const assistantMessage = chatSessionStore.addMessage({
         text: '',
         author: 'assistant',
@@ -128,10 +172,11 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       setTtsBuffer('');
       ttsRef.current = '';
       const completionPromise = modelStore.generateCompletion(
-        simplePrompt,
+        prompt,
         {
           temperature: 0.7,
           max_tokens: 100,
+          stop: ['\nUser:', '\nAssistant:', '</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>'],
         },
         (token: string) => {
           if (isGenerationComplete) return;
@@ -143,28 +188,38 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
             // TTS streaming logic
             ttsRef.current += token;
-            // Only speak when you have a full sentence or a long enough chunk
-            if (/[.!?]\s$/.test(ttsRef.current) || ttsRef.current.length > 30) {
-              const toSpeak = ttsRef.current.trim();
-              // Only speak if not just punctuation or whitespace
-              if (toSpeak && !/^[\s.,!?;:]+$/.test(toSpeak) && !ttsSpeaking) {
-                ttsSpeaking = true;
-                Tts.speak(toSpeak);
-                ttsRef.current = '';
-                Tts.addEventListener('tts-finish', () => {
-                  ttsSpeaking = false;
-                });
-              } else {
-                ttsRef.current = '';
+            // Regex for complete sentences
+            const sentenceRegex = /([^.?!]+[.?!]+["')\]]*\s*)/g;
+            let match;
+            let lastIndex = 0;
+            while ((match = sentenceRegex.exec(ttsRef.current)) !== null) {
+              const sentence = match[0].trim();
+              if (sentence && !/^[\s.,!?;:]+$/.test(sentence)) {
+                ttsQueue.current.push(sentence);
+                lastIndex = sentenceRegex.lastIndex;
               }
             }
+            if (lastIndex > 0) {
+              ttsRef.current = ttsRef.current.slice(lastIndex);
+            }
+            speakNextSentence();
           }
         }
       );
       const result = await completionPromise as string;
       isGenerationComplete = true;
       if (assistantMessage) {
-        const finalResponse = result || accumulatedResponse;
+        let finalResponse = result || accumulatedResponse;
+        // Truncate at first stop sequence
+        const stopSequences = ['\nUser:', '\nAssistant:', '</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>'];
+        let minIdx = finalResponse.length;
+        for (const stop of stopSequences) {
+          const idx = finalResponse.indexOf(stop);
+          if (idx !== -1 && idx < minIdx) minIdx = idx;
+        }
+        if (minIdx !== finalResponse.length) {
+          finalResponse = finalResponse.slice(0, minIdx);
+        }
         if (finalResponse) {
           const finalCleanedResponse = cleanLLMResponse(finalResponse);
           chatSessionStore.updateMessage(assistantMessage.id, finalCleanedResponse);
@@ -193,8 +248,11 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
           <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
           <Text style={[styles.welcomeText, { color: colors.text }]}>To get started, you need to download and load a language model.</Text>
-          <Text style={[styles.welcomeText, { color: colors.muted }]}>📱 Go to the "Models" tab to download the TinyLlama-1.1B-Chat model (~0.8GB)</Text>
-          <Text style={[styles.welcomeText, { color: colors.muted }]}>⚡ Once downloaded, tap "Load Model" to start chatting!</Text>
+          {modelStore.models.map((model) => (
+            <Text key={model.id} style={[styles.welcomeText, { color: colors.muted }]}>📱 {model.name} ({model.size})</Text>
+          ))}         
+          
+           <Text style={[styles.welcomeText, { color: colors.muted }]}>⚡ Once downloaded, tap "Load Model" to start chatting!</Text>
         </View>
       );
     }
@@ -210,7 +268,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     return (
       <View style={[styles.welcomeContainer, { backgroundColor: colors.surface }]}> 
         <Text style={[styles.welcomeTitle, { color: colors.primary }]}>Welcome to AI Chat!</Text>
-        <Text style={[styles.welcomeText, { color: colors.text }]}>Start chatting below!</Text>
+        <Text style={[styles.welcomeText, { color: colors.text }]}>Start chatting below! {modelStore.activeModel ? `(${modelStore.activeModel.name} ${modelStore.activeModel.size ? `- ${modelStore.activeModel.size}` : ''})` : ''}</Text>
       </View>
     );
   };
@@ -222,16 +280,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     </View>
   );
 
-  if (isWhisperLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={[styles.loadingText, { color: colors.muted }]}>Initializing Whisper Model...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
   if (whisperError) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
@@ -269,11 +317,17 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           ))}
           {isLoading && renderLoadingIndicator()}
         </ScrollView>
-        <ChatInput
+        <RealtimeChatInput
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
           colors={colors}
         />
+        {isWhisperLoading && (
+          <View style={styles.whisperOverlay} pointerEvents="none">
+            <ActivityIndicator color={colors.primary} size="large" />
+            <Text style={[styles.loadingText, { color: colors.muted }]}>Initializing Whisper Model...</Text>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -349,6 +403,17 @@ const styles = StyleSheet.create({
     zIndex: -1,
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+  },
+  whisperOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 });
 

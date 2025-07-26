@@ -1,5 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import { Platform } from 'react-native';
+// @ts-ignore
+import RNBackgroundDownloader, { BeginHandlerObject, DownloadTask, ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
 
 // Fallback paths for development/web environments
 const getFallbackPaths = () => {
@@ -18,7 +20,9 @@ export interface PlatformPaths {
 
 // Model download URLs - replace with actual download URLs
 const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
-  'phi-2.Q4_K_M.gguf': 'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf',
+  'phi-3-mini-4k-instruct-q4.gguf': 'https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf',
+  'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf': 'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+  'ggml-tiny.en.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin',
 };
 
 /**
@@ -84,7 +88,7 @@ export const checkModelAvailableForDownload = async (filename: string): Promise<
 };
 
 /**
- * Download model from URL to storage directory
+ * Download model from URL to storage directory using react-native-background-downloader
  */
 export const downloadModelToStorage = async (
   filename: string, 
@@ -92,54 +96,72 @@ export const downloadModelToStorage = async (
   onStatusUpdate?: (message: string) => void
 ): Promise<string> => {
   const isNativePlatform = Platform.OS === 'android' || Platform.OS === 'ios';
-  
-  if (!isNativePlatform) {
-    throw new Error('Model download is only supported on native platforms');
-  }
+  if (!isNativePlatform) throw new Error('Model download is only supported on native platforms');
 
   const modelPath = await getModelFilePath(filename);
   const downloadUrl = getModelDownloadUrl(filename);
-  
-  if (!downloadUrl) {
-    throw new Error(`No download URL found for ${filename}`);
+  if (!downloadUrl) throw new Error(`No download URL found for ${filename}`);
+
+  await ensureModelDirectories();
+
+  // Check if file already exists
+  const fileInfo = await FileSystem.getInfoAsync(modelPath);
+  if (fileInfo.exists) {
+    onStatusUpdate?.('Model already exists in storage');
+    onProgress?.(1);
+    return modelPath;
   }
 
-  try {
-    // Ensure model directory exists
-    await ensureModelDirectories();
+  // Helper to start or resume download
+  const startDownload = () => {
+    return new Promise<string>((resolve, reject) => {
+      let task = RNBackgroundDownloader.download({
+        id: filename,
+        url: downloadUrl,
+        destination: modelPath.replace('file://', ''),
+      })
+        .begin(({ expectedBytes }: BeginHandlerObject) => {
+          onStatusUpdate?.('Download started');
+        })
+        .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+          if (bytesTotal > 0) {
+            onProgress?.(bytesDownloaded / bytesTotal);
+          }
+        })
+        .done(() => {
+          onStatusUpdate?.('Model downloaded successfully');
+          onProgress?.(1);
+          resolve(modelPath);
+        })
+        .error(({ error, errorCode }: ErrorHandlerObject) => {
+          onStatusUpdate?.('Download failed, will try to resume...');
+          // Try to resume
+          RNBackgroundDownloader.checkForExistingDownloads().then((existingTasks: DownloadTask[]) => {
+            let existing = existingTasks.find((t: DownloadTask) => t.id === filename);
+            if (existing) {
+              existing
+                .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+                  if (bytesTotal > 0) {
+                    onProgress?.(bytesDownloaded / bytesTotal);
+                  }
+                })
+                .done(() => {
+                  onStatusUpdate?.('Model downloaded successfully (resumed)');
+                  onProgress?.(1);
+                  resolve(modelPath);
+                })
+                .error(({ error, errorCode }: ErrorHandlerObject) => {
+                  reject(new Error(error));
+                });
+            } else {
+              reject(new Error(error));
+            }
+          });
+        });
+    });
+  };
 
-    // Check if file already exists in storage
-    const fileInfo = await FileSystem.getInfoAsync(modelPath);
-    if (fileInfo.exists) {
-      onStatusUpdate?.(`Model already exists in storage`);
-      return modelPath;
-    }
-
-    onStatusUpdate?.(`Downloading ${filename}...`);
-    
-    // Download the model file
-    const downloadResumable = FileSystem.createDownloadResumable(
-      downloadUrl,
-      modelPath,
-      {},
-      (downloadProgress) => {
-        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-        onProgress?.(progress);
-      }
-    );
-
-    const result = await downloadResumable.downloadAsync();
-    
-    if (result && result.status === 200) {
-      onStatusUpdate?.(`Model downloaded successfully`);
-      return modelPath;
-    } else {
-      throw new Error(`Failed to download model: ${result?.status || 'Unknown error'}`);
-    }
-  } catch (error) {
-    console.error('Error downloading model:', error);
-    throw error;
-  }
+  return startDownload();
 };
 
 /**

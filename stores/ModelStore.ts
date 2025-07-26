@@ -34,13 +34,23 @@ export interface CompletionParams {
 class ModelStore {
   models: LLMModel[] = [
     {
-      id: 'phi2-q4km',
-      name: 'Phi-2 Q4_K_M (1.3GB)',
-      path: 'model/phi-2.Q4_K_M.gguf',
+      id: 'phi3-mini-4k-instruct',
+      name: 'Phi-3 Mini 4K Instruct',
+      path: 'model/phi-3-mini-4k-instruct-q4.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '1.3GB',
-      description: 'Phi-2 Q4_K_M quantized model for chat',
+      size: '1.8GB', // update with real size
+      description: 'Phi-3 Mini 4K Instruct model for chat',
+      languageSupport: ['English']
+    },
+    {
+      id: 'tinyllama-1.1b-chat-v1.0-q4_k_m',
+      name: 'TinyLlama-1.1B Chat v1.0 Q4_K_M',
+      path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+      isDownloaded: false,
+      isLoading: false,
+      size: '430MB',
+      description: 'TinyLlama-1.1B Chat v1.0 Q4_K_M quantized model for chat',
       languageSupport: ['English']
     }
   ];
@@ -60,7 +70,7 @@ class ModelStore {
   // Default completion parameters for language learning
   defaultCompletionParams: CompletionParams = {
     temperature: 0.7,
-    max_tokens: 500,
+    max_tokens: 100,
     top_p: 0.9,
     top_k: 40,
     stop: ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>']
@@ -275,22 +285,22 @@ class ModelStore {
   };
 
   // Test method to verify completion is working
-  testCompletion = async (): Promise<string> => {
-    if (!this.context) {
-      throw new Error('No model context available');
-    }
+  // testCompletion = async (): Promise<string> => {
+  //   if (!this.context) {
+  //     throw new Error('No model context available');
+  //   }
 
-    console.log('Testing completion with simple prompt...');
+  //   console.log('Testing completion with simple prompt...');
     
-    try {
-      const result = await this.generateCompletion('Hello', { max_tokens: 10 });
-      console.log('Test completion result:', result);
-      return result;
-    } catch (error) {
-      console.error('Test completion failed:', error);
-      throw error;
-    }
-  };
+  //   try {
+  //     const result = await this.generateCompletion('Hello', { max_tokens: 10 });
+  //     console.log('Test completion result:', result);
+  //     return result;
+  //   } catch (error) {
+  //     console.error('Test completion failed:', error);
+  //     throw error;
+  //   }
+  // };
 
   generateCompletion = async (
     prompt: string,
@@ -312,7 +322,6 @@ class ModelStore {
 
     try {
       let fullResponse = '';
-      
       // Ensure all parameters are plain objects, not MobX observables
       const completionOptions = {
         prompt: prompt,
@@ -471,43 +480,6 @@ class ModelStore {
     await this.initContext(activeModel);
     
     console.log('Context recovery completed');
-  };
-
-  // Language learning specific methods
-  generateLanguageLearningPrompt = (
-    type: 'conversation' | 'translation' | 'grammar' | 'vocabulary',
-    content: string,
-    targetLanguage: string,
-    nativeLanguage: string = 'English'
-  ): string => {
-    const prompts = {
-      conversation: `You are a helpful language learning assistant. The user is learning ${targetLanguage} and speaks ${nativeLanguage} natively. 
-
-Have a natural conversation with the user in ${targetLanguage}. Keep responses appropriate for language learners - not too complex, but engaging. If the user makes mistakes, gently correct them in a supportive way.
-
-User: ${content}
-Assistant:`,
-      
-      translation: `You are a language learning assistant. Translate the following text from ${nativeLanguage} to ${targetLanguage}. Then provide a brief explanation of key grammar points or vocabulary used.
-
-Text to translate: "${content}"
-
-Translation:`,
-      
-      grammar: `You are a grammar tutor for ${targetLanguage}. Analyze the following text and provide corrections with explanations. Be encouraging and educational.
-
-Text: "${content}"
-
-Grammar Analysis:`,
-      
-      vocabulary: `You are a vocabulary tutor for ${targetLanguage}. Help the user understand the following word or phrase. Provide definition, pronunciation tips, example sentences, and usage context.
-
-Word/Phrase: "${content}"
-
-Vocabulary Explanation:`
-    };
-
-    return prompts[type];
   };
 
   updateCompletionParams = (params: Partial<CompletionParams>) => {

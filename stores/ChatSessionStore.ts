@@ -17,7 +17,7 @@ export interface ChatMessage {
   author: 'user' | 'assistant';
   timestamp: number;
   language?: string;
-  type?: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay';
+  type?: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay' | 'transcription';
 }
 
 export interface ChatSession {
@@ -46,7 +46,7 @@ class ChatSessionStore {
   
   // Language learning settings
   settings: LanguageLearningSettings = {
-    targetLanguage: 'Spanish',
+    targetLanguage: 'English',
     nativeLanguage: 'English',
     learningLevel: 'beginner',
     focusAreas: ['conversation', 'grammar'],
@@ -167,6 +167,52 @@ class ChatSessionStore {
     }
   };
 
+  // Add real-time transcription message handling
+  updateTranscriptionMessage = (text: string, isFinal: boolean = false) => {
+    if (!this.activeSession) return;
+
+    // Find existing transcription message (temporary message)
+    const transcriptionMessageIndex = this.activeSession.messages.findIndex(
+      m => m.author === 'user' && m.type === 'transcription'
+    );
+
+    if (transcriptionMessageIndex >= 0) {
+      // Update existing transcription message
+      runInAction(() => {
+        this.activeSession!.messages[transcriptionMessageIndex].text = text;
+        this.activeSession!.messages[transcriptionMessageIndex].timestamp = Date.now();
+        // Do NOT convert to 'conversation' type
+        this.activeSession!.updatedAt = Date.now();
+      });
+    } else {
+      // Create new transcription message
+      const newMessage: ChatMessage = {
+        id: generateId(),
+        text: text,
+        author: 'user',
+        timestamp: Date.now(),
+        type: 'transcription', // always 'transcription'
+      };
+
+      runInAction(() => {
+        this.activeSession!.messages.push(newMessage);
+        this.activeSession!.updatedAt = Date.now();
+      });
+    }
+  };
+
+  // Clear transcription message when recording stops
+  clearTranscriptionMessage = () => {
+    if (!this.activeSession) return;
+
+    runInAction(() => {
+      this.activeSession!.messages = this.activeSession!.messages.filter(
+        m => !(m.author === 'user' && m.type === 'transcription')
+      );
+      this.activeSession!.updatedAt = Date.now();
+    });
+  };
+
   deleteMessage = (messageId: string) => {
     if (!this.activeSession) return;
 
@@ -196,6 +242,24 @@ class ChatSessionStore {
   updateSettings = (settings: Partial<LanguageLearningSettings>) => {
     runInAction(() => {
       this.settings = { ...this.settings, ...settings };
+    });
+  };
+
+  // Clean corrupted messages from the active session
+  cleanCorruptedMessages = () => {
+    if (!this.activeSession) return;
+    
+    runInAction(() => {
+      if (this.activeSession) {
+        this.activeSession.messages = this.activeSession.messages.filter(msg => {
+          const text = msg.text || '';
+          return !text.includes('"stop":') && 
+                 !text.includes('"temperature":') && 
+                 !text.includes('"max_tokens":') &&
+                 !text.includes('"top_p":') &&
+                 !text.includes('"top_k":');
+        });
+      }
     });
   };
 

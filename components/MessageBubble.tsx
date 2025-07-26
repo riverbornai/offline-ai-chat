@@ -41,6 +41,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         return '🌍';
       case 'roleplay':
         return '🎭';
+      case 'transcription':
+        return '🎤';
       default:
         return '';
     }
@@ -54,6 +56,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isUser ? styles.userBubble : styles.assistantBubble,
           {
             backgroundColor: isUser ? colors.primary : colors.surface,
+            borderWidth: message.type === 'transcription' ? 1 : 0,
+            borderColor: message.type === 'transcription' ? colors.muted : 'transparent',
+            borderStyle: message.type === 'transcription' ? 'dashed' : 'solid',
           },
         ]}
         onPress={onPress}
@@ -61,7 +66,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         disabled={!onPress && !onLongPress}
         activeOpacity={0.8}
       >
-        {!isUser && message.type && (
+        {message.type && (message.type === 'transcription' || !isUser) && (
           <View style={styles.typeIndicator}>
             <Text style={styles.typeIcon}>{getTypeIcon(message.type)}</Text>
           </View>
@@ -72,10 +77,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             styles.messageText,
             {
               color: isUser ? colors.surface : colors.text,
+              fontStyle: message.type === 'transcription' ? 'italic' : 'normal',
+              opacity: message.type === 'transcription' ? 0.8 : 1,
             },
           ]}
         >
-          {message.text}
+          {message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim() || null}
+          {message.type === 'transcription' && '...'}
         </Text>
         
         <Text

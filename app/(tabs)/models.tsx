@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
 import { useStores } from '../../components/StoreProvider';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
-import { downloadModel, isModelReady, quickSetup } from '../../utils/modelSetup';
+import { AVAILABLE_MODELS, downloadModel, isModelReady, quickSetup } from '../../utils/modelSetup';
+import { getModelFileInfo } from '../../utils/platformPaths';
 
 const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
@@ -25,7 +27,69 @@ const ModelsScreen: React.FC = observer(() => {
   const [setupMessage, setSetupMessage] = useState<string>('');
   const [setupStatus, setSetupStatus] = useState<'idle' | 'progress' | 'success' | 'error'>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
-  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
+  const [lastFailedModelId, setLastFailedModelId] = useState<string | null>(null);
+  const [partialDownloadInfo, setPartialDownloadInfo] = useState<{ [modelId: string]: number }>({});
+
+  React.useEffect(() => {
+    // On mount, check for in-progress downloads and attach handlers
+    (async () => {
+      const tasks = await RNBackgroundDownloader.checkForExistingDownloads();
+      const inProgressTask = tasks.find(
+        t => t.state !== 'DONE' && t.state !== 'FAILED'
+      );
+      if (inProgressTask) {
+        // Map task id (filename) to model id
+        const modelEntry = Object.entries(AVAILABLE_MODELS).find(
+          ([modelId, config]) => config.filename === inProgressTask.id
+        );
+        if (modelEntry) {
+          const [modelId] = modelEntry;
+          setDownloadingModelId(modelId); // Use modelId, not filename!
+          // Show current progress immediately
+          if (inProgressTask.bytesTotal > 0) {
+            setDownloadProgress(inProgressTask.bytesDownloaded / inProgressTask.bytesTotal);
+          }
+          setSetupStatus('progress');
+          setSetupMessage('Resuming background download...');
+          // Attach handlers
+          inProgressTask
+            .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
+              if (bytesTotal > 0) setDownloadProgress(bytesDownloaded / bytesTotal);
+            })
+            .done(() => {
+              setSetupStatus('success');
+              setSetupMessage('Model downloaded successfully!');
+              setDownloadProgress(1);
+              // Update MobX model state so UI shows the initialize button
+              if (modelStore && typeof modelStore.setModelPath === 'function') {
+                modelStore.setModelPath(modelId, AVAILABLE_MODELS[modelId].filename);
+              }
+              setTimeout(() => {
+                setSetupStatus('idle');
+                setSetupMessage('');
+                setDownloadProgress(0);
+                setDownloadingModelId(null);
+              }, 3000);
+            })
+            .error(({ error }: ErrorHandlerObject) => {
+              setSetupStatus('error');
+              setSetupMessage(`Download failed: ${error}`);
+              setDownloadProgress(0);
+            });
+        }
+      }
+    })();
+  }, [modelStore.models.length]);
+
+  // Helper to check if model is fully downloaded
+  const isFullyDownloaded = async (model: typeof modelStore.models[1]) => {
+    const config = AVAILABLE_MODELS[model.id];
+    if (!config) return false;
+    const info = await getModelFileInfo(String(config.filename));
+    const TOLERANCE = 1024 * 1024; // 1MB
+    return !!info && info.exists && info.size >= (config.expectedSize - TOLERANCE);
+  };
 
   const handleLoadModel = async (modelId: string) => {
     const model = modelStore.models.find(m => m.id === modelId);
@@ -49,53 +113,58 @@ const ModelsScreen: React.FC = observer(() => {
     }
   };
 
-  const handleDownload = async (modelId: string) => {
+  const handleDownload = async (modelId: string, resume: boolean = false) => {
     try {
-      setIsDownloading(true);
+      setDownloadingModelId(modelId);
       setSetupMessage('');
       setSetupStatus('progress');
       setDownloadProgress(0);
-      
-      await downloadModel(modelId as any, {
-        onProgress: (message) => {
-          setSetupMessage(message);
-          setSetupStatus('progress');
-        },
-        onDownloadProgress: (progress) => {
-          setDownloadProgress(progress);
-        },
-        onSuccess: (message) => {
-          setSetupMessage(message);
-          setSetupStatus('success');
-          setDownloadProgress(1);
-          setTimeout(() => {
-            setSetupStatus('idle');
-            setSetupMessage('');
+      setLastFailedModelId(null);
+      const config = AVAILABLE_MODELS[modelId];
+      if (config && !resume) {
+        const { deleteModelFile } = await import('../../utils/platformPaths');
+        await deleteModelFile(config.filename);
+      }
+      await downloadModel(
+        modelId as any,
+        {
+          onProgress: (message) => {
+            setSetupMessage(message);
+            setSetupStatus('progress');
+          },
+          onDownloadProgress: (progress) => {
+            setDownloadProgress(progress);
+          },
+          onSuccess: (message) => {
+            setSetupMessage(message);
+            setSetupStatus('success');
+            setDownloadProgress(1);
+            setTimeout(() => {
+              setSetupStatus('idle');
+              setSetupMessage('');
+              setDownloadProgress(0);
+              setDownloadingModelId(null);
+            }, 3000);
+          },
+          onError: (message) => {
+            setSetupMessage(message);
+            setSetupStatus('error');
             setDownloadProgress(0);
-            setIsDownloading(false);
-          }, 3000);
+            setLastFailedModelId(modelId);
+          }
         },
-        onError: (message) => {
-          setSetupMessage(message);
-          setSetupStatus('error');
-          setDownloadProgress(0);
-          setTimeout(() => {
-            setSetupStatus('idle');
-            setSetupMessage('');
-            setIsDownloading(false);
-          }, 5000);
-        }
-      });
+        resume
+      );
     } catch (error) {
       setSetupMessage(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setSetupStatus('error');
       setDownloadProgress(0);
-      setTimeout(() => {
-        setSetupStatus('idle');
-        setSetupMessage('');
-        setIsDownloading(false);
-      }, 5000);
+      setLastFailedModelId(modelId);
     }
+  };
+
+  const handleRetryDownload = async (modelId: string) => {
+    await handleDownload(modelId, true);
   };
 
   const handleQuickSetup = async () => {
@@ -142,12 +211,83 @@ const ModelsScreen: React.FC = observer(() => {
     }
   };
 
-  const renderModelCard = (model: typeof modelStore.models[0]) => {
+  const renderModelCard = (model: typeof modelStore.models[1]) => {
     const isActive = modelStore.activeModelId === model.id;
     const isLoading = model.isLoading || (modelStore.isContextLoading && modelStore.activeModelId === model.id);
     const isQuickSetupLoading = modelStore.isQuickSetupLoading;
     const ready = isModelReady();
+    const config = AVAILABLE_MODELS[model.id];
+    const expectedSize = config?.expectedSize || 0;
+    const [fileExists, setFileExists] = React.useState(false);
+    const [fullyDownloaded, setFullyDownloaded] = React.useState(false);
 
+    // Helper to refresh file info
+    const refreshFileInfo = async () => {
+      const info = await getModelFileInfo(String(config.filename));
+      setFileExists(!!info && info.exists);
+      const TOLERANCE = 1024 * 1024; // 1MB
+      setFullyDownloaded(!!info && info.exists && info.size >= (expectedSize - TOLERANCE));
+    };
+
+    React.useEffect(() => {
+      refreshFileInfo();
+    }, [model.id, model.isDownloaded]);
+
+    // Patch handleDownload to accept a callback for after success
+    const handleDownloadWithRefresh = async (modelId: string, afterSuccess?: () => void) => {
+      try {
+        setDownloadingModelId(modelId);
+        setSetupMessage('');
+        setSetupStatus('progress');
+        setDownloadProgress(0);
+        setLastFailedModelId(null);
+        // Delete any partial file before starting download
+        const config = AVAILABLE_MODELS[modelId];
+        if (config) {
+          const { deleteModelFile } = await import('../../utils/platformPaths');
+          await deleteModelFile(config.filename);
+        }
+        await downloadModel(
+          modelId as any,
+          {
+            onProgress: (message) => {
+              setSetupMessage(message);
+              setSetupStatus('progress');
+            },
+            onDownloadProgress: (progress) => {
+              setDownloadProgress(progress);
+            },
+            onSuccess: (message) => {
+              setSetupMessage(message);
+              setSetupStatus('success');
+              setDownloadProgress(1);
+              if (afterSuccess) afterSuccess();
+              setTimeout(() => {
+                setSetupStatus('idle');
+                setSetupMessage('');
+                setDownloadProgress(0);
+                setDownloadingModelId(null);
+              }, 3000);
+            },
+            onError: (message) => {
+              setSetupMessage(message);
+              setSetupStatus('error');
+              setDownloadProgress(0);
+              setLastFailedModelId(modelId); // Track which model failed
+              // No timeout here, let user retry
+            }
+          }
+        );
+      } catch (error) {
+        setSetupMessage(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setSetupStatus('error');
+        setDownloadProgress(0);
+        setLastFailedModelId(modelId);
+        // No timeout here, let user retry
+      }
+    };
+
+    // Use the patched download handler in the UI
     return (
       <View
         key={model.id}
@@ -168,7 +308,7 @@ const ModelsScreen: React.FC = observer(() => {
             backgroundColor: ready ? colors.success : (model.isDownloaded ? colors.warning : colors.muted)
           }]}>
             <Text style={[styles.statusText, { color: colors.surface }]}>
-              {isDownloading ? 'Downloading...' : isQuickSetupLoading ? 'Setting up...' : ready ? 'Ready' : (model.isDownloaded ? 'Downloaded' : 'Available')}
+              {downloadingModelId === model.id ? 'Downloading...' : isQuickSetupLoading ? 'Setting up...' : ready ? 'Ready' : (model.isDownloaded ? 'Downloaded' : 'Available')}
             </Text>
           </View>
         </View>
@@ -207,9 +347,9 @@ const ModelsScreen: React.FC = observer(() => {
         )}
 
         {/* Download Progress Bar */}
-        {isDownloading && downloadProgress > 0 && (
+        {(downloadingModelId === model.id && downloadProgress > 0) ? (
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
+            <View style={[styles.progressBar, { backgroundColor: colors.background }]}> 
               <View 
                 style={[
                   styles.progressFill, 
@@ -220,30 +360,37 @@ const ModelsScreen: React.FC = observer(() => {
                 ]} 
               />
             </View>
-            <Text style={[styles.progressText, { color: colors.muted }]}>
-              {Math.round(downloadProgress * 100)}%
+            <Text style={[styles.progressText, { color: colors.muted }]}> 
+              {`${Math.round(downloadProgress * 100)}%`}
             </Text>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.actionButtons}>
-          {!model.isDownloaded && (
+          {/* Download/Retry/Initialize/Load logic */}
+          {!fileExists ? (
             <TouchableOpacity
               style={[styles.setupButton, { backgroundColor: colors.primary }]}
-              onPress={() => handleDownload(model.id)}
-              disabled={isLoading || isQuickSetupLoading || isDownloading}
+              onPress={() => handleDownloadWithRefresh(model.id, refreshFileInfo)}
+              disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
             >
-              {isLoading || isQuickSetupLoading || isDownloading ? (
+              {isLoading || isQuickSetupLoading || downloadingModelId === model.id ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: colors.surface }]}>
+                <Text style={[styles.buttonText, { color: colors.surface }]}> 
                   📥 Download Model
                 </Text>
               )}
             </TouchableOpacity>
-          )}
-
-          {model.isDownloaded && !ready && (
+          ) : (!fullyDownloaded ? (
+            <TouchableOpacity
+              style={[styles.setupButton, { backgroundColor: colors.error }]}
+              onPress={() => handleDownloadWithRefresh(model.id, refreshFileInfo)}
+              disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
+            >
+              <Text style={[styles.buttonText, { color: colors.surface }]}>🔄 Download Again</Text>
+            </TouchableOpacity>
+          ) : (!ready ? (
             <TouchableOpacity
               style={[styles.setupButton, { backgroundColor: colors.warning }]}
               onPress={handleQuickSetup}
@@ -252,14 +399,10 @@ const ModelsScreen: React.FC = observer(() => {
               {isLoading || isQuickSetupLoading ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: colors.surface }]}>
-                  🔧 Initialize Model
-                </Text>
+                <Text style={[styles.buttonText, { color: colors.surface }]}>🔧 Initialize Model</Text>
               )}
             </TouchableOpacity>
-          )}
-          
-          {ready && (
+          ) : (
             <View style={styles.downloadedActions}>
               <TouchableOpacity
                 style={[
@@ -274,9 +417,7 @@ const ModelsScreen: React.FC = observer(() => {
                 {isLoading ? (
                   <ActivityIndicator color={colors.surface} size="small" />
                 ) : (
-                  <Text style={[styles.buttonText, { color: colors.surface }]}>
-                    {isActive ? 'Active' : 'Load'}
-                  </Text>
+                  <Text style={[styles.buttonText, { color: colors.surface }]}> {isActive ? 'Active' : 'Load'} </Text>
                 )}
               </TouchableOpacity>
 
@@ -285,13 +426,11 @@ const ModelsScreen: React.FC = observer(() => {
                   style={[styles.releaseButton, { backgroundColor: colors.error }]}
                   onPress={() => modelStore.releaseContext()}
                 >
-                  <Text style={[styles.buttonText, { color: colors.surface }]}>
-                    Release
-                  </Text>
+                  <Text style={[styles.buttonText, { color: colors.surface }]}>Release</Text>
                 </TouchableOpacity>
               )}
             </View>
-          )}
+          )))}
         </View>
       </View>
     );
@@ -327,10 +466,19 @@ const ModelsScreen: React.FC = observer(() => {
             {setupStatus === 'progress' && (
               <ActivityIndicator color={colors.surface} size="small" />
             )}
-            <Text style={[styles.setupMessageText, { color: colors.surface }]}>
+            <Text style={[styles.setupMessageText, { color: colors.surface }]}> 
               {setupStatus === 'success' ? '✅ ' : setupStatus === 'error' ? '❌ ' : ''}
               {setupMessage}
             </Text>
+            {/* Retry button for error */}
+            {setupStatus === 'error' && lastFailedModelId && (
+              <TouchableOpacity
+                style={{ marginLeft: 12, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primary, borderRadius: 8 }}
+                onPress={() => handleRetryDownload(lastFailedModelId)}
+              >
+                <Text style={{ color: colors.surface, fontWeight: 'bold' }}>Retry</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -351,7 +499,7 @@ const ModelsScreen: React.FC = observer(() => {
             ℹ️ Getting Started
           </Text>
           <Text style={[styles.infoText, { color: colors.text }]}>
-            {`1. Download the Phi-2 Q2_K model (1.2GB) - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the AI Chat tab\n4. Release the model when not in use to save memory`}
+            {`1. Download the Phi-2 Q4_K_M (1.7GB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the AI Chat tab\n4. Release the model when not in use to save memory`}
           </Text>
         </View>
       </ScrollView>

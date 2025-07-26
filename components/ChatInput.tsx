@@ -1,3 +1,4 @@
+import * as FileSystem from 'expo-file-system';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -29,6 +30,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [transcription, setTranscription] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const recording = useRef<boolean>(false);
+  const audioInterval = useRef<number | null>(null);
 
   // Setup audio recorder on mount
   React.useEffect(() => {
@@ -37,7 +39,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         sampleRate: 16000,
         channels: 1,
         bitsPerSample: 16,
-        wavFile: 'recording.wav',
+        wavFile: `${FileSystem.documentDirectory}recording.wav`,
       };
       AudioRecord.init(options);
       if (Platform.OS === 'android') {
@@ -67,6 +69,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setupAudio();
     return () => {
       if (recording.current) AudioRecord.stop();
+      if (audioInterval.current) {
+        clearInterval(audioInterval.current);
+      }
     };
   }, []);
 
@@ -75,39 +80,64 @@ const ChatInput: React.FC<ChatInputProps> = ({
       Alert.alert('Permission Required', 'Please grant microphone permission to record audio.');
       return;
     }
+    
     setIsRecording(true);
     setTranscription('');
     recording.current = true;
-    await AudioRecord.start();
+    
+    try {
+      // Start audio recording
+      await AudioRecord.start();
+      console.log('Recording started - will process after stop');
+      
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      Alert.alert('Recording Error', 'Failed to start audio recording.');
+      setIsRecording(false);
+      recording.current = false;
+    }
   };
 
   const stopRecording = async () => {
     if (!recording.current) return;
+    
     setIsRecording(false);
     recording.current = false;
-    const audioFile = await AudioRecord.stop();
-    if (audioFile) {
-      setIsTranscribing(true);
-      try {
-        const result = await whisperService.transcribe(audioFile);
-        let text = result.text?.trim() || '';
-        if (!text && Array.isArray(result.segments) && result.segments.length > 0) {
-          text = result.segments.map(seg => seg.text).join(' ').trim();
-        }
-        setTranscription(text);
-        if (text) {
-          setTimeout(() => {
+    
+    // Clear the audio feeding interval
+    if (audioInterval.current) {
+      clearInterval(audioInterval.current);
+      audioInterval.current = null;
+    }
+    
+    try {
+      // Stop audio recording
+      const audioFile = await AudioRecord.stop();
+      
+      // Process the recorded audio file
+      if (audioFile) {
+        setIsTranscribing(true);
+        try {
+          const result = await whisperService.transcribe(audioFile);
+          let text = result.text?.trim() || '';
+          if (!text && Array.isArray(result.segments) && result.segments.length > 0) {
+            text = result.segments.map(seg => seg.text).join(' ').trim();
+          }
+          if (text) {
             onSendMessage(text);
-            setTranscription('');
-          }, 800); // show briefly
-        } else {
-          Alert.alert('No speech detected', 'Try speaking more clearly.');
+          } else {
+            Alert.alert('No speech detected', 'Try speaking more clearly.');
+          }
+        } catch (err) {
+          Alert.alert('Transcription Error', 'Failed to transcribe audio.');
+        } finally {
+          setIsTranscribing(false);
         }
-      } catch (err) {
-        Alert.alert('Transcription Error', 'Failed to transcribe audio.');
-      } finally {
-        setIsTranscribing(false);
       }
+      
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      Alert.alert('Recording Error', 'Failed to stop audio recording.');
     }
   };
 
