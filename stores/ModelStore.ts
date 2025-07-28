@@ -3,12 +3,12 @@ import { makeAutoObservable, runInAction, toJS } from 'mobx';
 import { makePersistable } from 'mobx-persist-store';
 import { Platform } from 'react-native';
 import {
-  checkModelFileExists,
-  deleteModelFile,
-  ensureModelDirectories,
-  formatBytes,
-  getModelFileInfo,
-  getModelFilePath
+    checkModelFileExists,
+    deleteModelFile,
+    ensureModelDirectories,
+    formatBytes,
+    getModelFileInfo,
+    getModelFilePath
 } from '../utils/platformPaths';
 import { Storage } from '../utils/storage';
 
@@ -39,7 +39,7 @@ class ModelStore {
       path: 'model/phi-3-mini-4k-instruct-q4.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '1.8GB', // update with real size
+      size: '2.23GB', // app download verified size
       description: 'Phi-3 Mini 4K Instruct model for chat',
       languageSupport: ['English']
     },
@@ -49,7 +49,7 @@ class ModelStore {
       path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '430MB',
+      size: '638MB', // browser verified size
       description: 'TinyLlama-1.1B Chat v1.0 Q4_K_M quantized model for chat',
       languageSupport: ['English']
     }

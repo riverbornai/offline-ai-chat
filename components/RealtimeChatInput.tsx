@@ -252,10 +252,10 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
             isRecording ? styles.micButtonActive : {},
             { backgroundColor: isRecording ? colors.error : colors.primary },
           ]}
-          onPress={isRecording ? undefined : startRecording}
-          disabled={isLoading || isTranscribing || isRecording}
+          onPress={isRecording ? stopRecording : startRecording}
+          disabled={isLoading || isTranscribing}
         >
-          <Text style={styles.micIcon}>{'🎤'}</Text>
+          <Text style={styles.micIcon}>{isRecording ? '⏹️' : '🎤'}</Text>
         </TouchableOpacity>
         {isRecording && (
           <View style={styles.pulseContainer}>
