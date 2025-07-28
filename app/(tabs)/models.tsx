@@ -1,13 +1,13 @@
 import { observer } from 'mobx-react';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -542,7 +542,7 @@ const ModelsScreen: React.FC = observer(() => {
             ℹ️ Getting Started
           </Text>
           <Text style={[styles.infoText, { color: colors.text }]}>
-            {`1. Download either Phi-3 Mini (2.2GB) or TinyLlama (638MB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the Chat tab\n4. Release the model when not in use to save memory`}
+            {`1. Download either Phi-3 Mini (2.23GB) or TinyLlama (638MB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the Chat tab\n4. Release the model when not in use to save memory`}
           </Text>
         </View>
       </ScrollView>

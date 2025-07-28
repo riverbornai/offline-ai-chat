@@ -39,7 +39,7 @@ class ModelStore {
       path: 'model/phi-3-mini-4k-instruct-q4.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '2.2GB', // browser verified size
+      size: '2.23GB', // app download verified size
       description: 'Phi-3 Mini 4K Instruct model for chat',
       languageSupport: ['English']
     },
