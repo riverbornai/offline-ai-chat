@@ -38,11 +38,11 @@ export class ConversationPromptBuilder {
     return `${baseContext}
 
 ### Instructions:
-- Help the user practice English.
-- Be friendly and clear.
-- Gently correct mistakes.
-- Ask follow-up questions.
-- Respond only as the assistant.
+- Practice English with user
+- Correct ALL mistakes (grammar, vocab, pronunciation)
+- Point out wrong answers clearly
+- Explain corrections briefly
+- Ask follow-up questions
 
 ${historyContext}
 
