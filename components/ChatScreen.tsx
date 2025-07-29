@@ -175,11 +175,10 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         prompt,
         {
           temperature: 0.7,
-          max_tokens: 100,
-          stop: ['\nUser:', '\nAssistant:', '</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>'],
+          max_tokens: 512, // Increased from 100 to allow longer responses
+          stop: ['\nUser:', '\nAssistant:'], // Removed model-specific tokens that might trigger prematurely
         },
         (token: string) => {
-          if (isGenerationComplete) return;
           tokensReceived++;
           if (assistantMessage) {
             accumulatedResponse += token;
@@ -211,7 +210,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       if (assistantMessage) {
         let finalResponse = result || accumulatedResponse;
         // Truncate at first stop sequence
-        const stopSequences = ['\nUser:', '\nAssistant:', '</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>'];
+        const stopSequences = ['\nUser:', '\nAssistant:'];
         let minIdx = finalResponse.length;
         for (const stop of stopSequences) {
           const idx = finalResponse.indexOf(stop);
