@@ -7,9 +7,11 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
 import { useStores } from '../../components/StoreProvider';
@@ -17,11 +19,13 @@ import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { AVAILABLE_MODELS, downloadModel, isModelReady, quickSetup } from '../../utils/modelSetup';
 import { formatBytes, getModelFileInfo } from '../../utils/platformPaths';
+import { ttsService } from '../../services/ttsService';
 
 const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { modelStore } = useStores();
+  const [activeTab, setActiveTab] = useState<'llm' | 'tts'>('llm');
 
   // State for setup feedback
   const [setupMessage, setSetupMessage] = useState<string>('');
@@ -138,8 +142,13 @@ const ModelsScreen: React.FC = observer(() => {
         return;
       }
 
-      await modelStore.initContext(model);
-      Alert.alert('Success', `${model.name} loaded successfully!`);
+      if (model.type === 'tts') {
+        await ttsService.initialize(model.id);
+        Alert.alert('Success', `TTS Model ${model.name} loaded successfully!`);
+      } else {
+        await modelStore.initContext(model);
+        Alert.alert('Success', `${model.name} loaded successfully!`);
+      }
     } catch (error) {
       console.error('Failed to load model:', error);
       Alert.alert('Error', `Failed to load model: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -276,61 +285,21 @@ const ModelsScreen: React.FC = observer(() => {
       refreshFileInfo();
     }, [model.id, model.isDownloaded]);
 
-    // Patch handleDownload to accept a callback for after success
-    const handleDownloadWithRefresh = async (modelId: string, afterSuccess?: () => void) => {
-      try {
-        setDownloadingModelId(modelId);
-        setSetupMessage('');
-        setSetupStatus('progress');
-        setDownloadProgress(0);
-        setLastFailedModelId(null);
-        // Delete any partial file before starting download
-        const config = AVAILABLE_MODELS[modelId];
-        if (config) {
-          const { deleteModelFile } = await import('../../utils/platformPaths');
-          await deleteModelFile(config.filename);
-        }
-        await downloadModel(
-          modelId as any,
-          {
-            onProgress: (message) => {
-              setSetupMessage(message);
-              setSetupStatus('progress');
-            },
-            onDownloadProgress: (progress) => {
-              setDownloadProgress(progress);
-            },
-            onSuccess: (message) => {
-              setSetupMessage(message);
-              setSetupStatus('success');
-              setDownloadProgress(1);
-              if (afterSuccess) afterSuccess();
-              setTimeout(() => {
-                setSetupStatus('idle');
-                setSetupMessage('');
-                setDownloadProgress(0);
-                setDownloadingModelId(null);
-              }, 3000);
-            },
-            onError: (message) => {
-              setSetupMessage(message);
-              setSetupStatus('error');
-              setDownloadProgress(0);
-              setLastFailedModelId(modelId); // Track which model failed
-              // No timeout here, let user retry
-            }
-          }
-        );
-      } catch (error) {
-        setSetupMessage(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        setSetupStatus('error');
-        setDownloadProgress(0);
-        setLastFailedModelId(modelId);
-        // No timeout here, let user retry
-      }
+    const getStatusInfo = () => {
+      if (downloadingModelId === model.id) return { label: 'Downloading...', color: colors.primary, icon: 'cloud-download' as const };
+      if (isQuickSetupLoading) return { label: 'Setting up...', color: colors.warning, icon: 'construct' as const };
+      
+      const isLoaded = model.type === 'tts' 
+        ? ttsService.getIsLoaded() 
+        : (modelStore.activeModelId === model.id && !modelStore.isContextLoading);
+      
+      if (isLoaded) return { label: 'Active', color: colors.success, icon: 'checkmark-circle' as const };
+      if (model.isDownloaded) return { label: 'Downloaded', color: colors.secondary, icon: 'save' as const };
+      return { label: 'Available', color: colors.muted, icon: 'cloud-outline' as const };
     };
 
-    // Use the patched download handler in the UI
+    const status = getStatusInfo();
+
     return (
       <View
         key={model.id}
@@ -339,7 +308,6 @@ const ModelsScreen: React.FC = observer(() => {
           {
             backgroundColor: colors.surface,
             borderColor: isActive ? colors.primary : colors.border,
-            borderWidth: isActive ? 2 : 1,
           },
         ]}
       >
@@ -347,30 +315,40 @@ const ModelsScreen: React.FC = observer(() => {
           <Text style={[styles.modelName, { color: colors.text }]}>
             {model.name}
           </Text>
-          <View style={[styles.statusBadge, {
-            backgroundColor: ready ? colors.success : (model.isDownloaded ? colors.warning : colors.muted)
-          }]}>
-            <Text style={[styles.statusText, { color: colors.surface }]}>
-              {downloadingModelId === model.id ? 'Downloading...' : isQuickSetupLoading ? 'Setting up...' : ready ? 'Ready' : (model.isDownloaded ? 'Downloaded' : 'Available')}
+          <View style={[styles.statusBadge, { backgroundColor: `${status.color}15` }]}>
+            <Ionicons name={status.icon} size={14} color={status.color} />
+            <Text style={[styles.statusText, { color: status.color }]}>
+              {status.label}
             </Text>
           </View>
         </View>
 
-        <Text style={[styles.modelDescription, { color: colors.muted }]}>
+        <Text style={[styles.modelDescription, { color: colors.text }]}>
           {model.description}
         </Text>
 
-        <Text style={[styles.modelSize, { color: colors.muted }]}>
-          Size: {model.size}
-        </Text>
+        <View style={styles.metaInfoRow}>
+          <View style={styles.metaItem}>
+            <Ionicons name="resize" size={16} color={colors.muted} />
+            <Text style={[styles.metaText, { color: colors.text }]}>{model.size}</Text>
+          </View>
+          {model.languageSupport && (
+            <View style={styles.metaItem}>
+              <Ionicons name="language" size={16} color={colors.muted} />
+              <Text style={[styles.metaText, { color: colors.text }]}>
+                {model.languageSupport.length} Languages
+              </Text>
+            </View>
+          )}
+        </View>
 
         {model.languageSupport && (
           <View style={styles.languagesContainer}>
-            <Text style={[styles.languagesLabel, { color: colors.muted }]}>
-              Languages:
+            <Text style={[styles.languagesLabel, { color: colors.text }]}>
+              SUPPORTED LANGUAGES
             </Text>
             <View style={styles.languagesList}>
-              {model.languageSupport.slice(0, 3).map((lang) => (
+              {model.languageSupport.slice(0, 4).map((lang) => (
                 <View
                   key={lang}
                   style={[styles.languageTag, { backgroundColor: colors.background }]}
@@ -380,9 +358,9 @@ const ModelsScreen: React.FC = observer(() => {
                   </Text>
                 </View>
               ))}
-              {model.languageSupport.length > 3 && (
-                <Text style={[styles.moreLanguages, { color: colors.muted }]}>
-                  +{model.languageSupport.length - 3} more
+              {model.languageSupport.length > 4 && (
+                <Text style={[styles.moreLanguages, { color: colors.text }]}>
+                  +{model.languageSupport.length - 4} more
                 </Text>
               )}
             </View>
@@ -392,7 +370,13 @@ const ModelsScreen: React.FC = observer(() => {
         {/* Download Progress Bar */}
         {(downloadingModelId === model.id && downloadProgress > 0) ? (
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
+            <View style={styles.progressHeader}>
+              <Text style={[styles.progressLabel, { color: colors.text }]}>Downloading Model...</Text>
+              <Text style={[styles.progressPercentage, { color: colors.primary }]}>
+                {`${Math.round(downloadProgress * 100)}%`}
+              </Text>
+            </View>
+            <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
               <View
                 style={[
                   styles.progressFill,
@@ -403,35 +387,35 @@ const ModelsScreen: React.FC = observer(() => {
                 ]}
               />
             </View>
-            <Text style={[styles.progressText, { color: colors.muted }]}>
-              {`${Math.round(downloadProgress * 100)}%`}
-            </Text>
           </View>
         ) : null}
 
         <View style={styles.actionButtons}>
-          {/* Download/Retry/Initialize/Load logic */}
           {!fileExists ? (
             <TouchableOpacity
               style={[styles.setupButton, { backgroundColor: colors.primary }]}
-              onPress={() => handleDownloadWithRefresh(model.id, refreshFileInfo)}
+              onPress={() => handleDownload(model.id)}
               disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
             >
               {isLoading || isQuickSetupLoading || downloadingModelId === model.id ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: colors.surface }]}>
-                  📥 Download Model
-                </Text>
+                <>
+                  <Ionicons name="cloud-download" size={20} color={colors.surface} />
+                  <Text style={[styles.buttonText, { color: colors.surface }]}>
+                    Download Model
+                  </Text>
+                </>
               )}
             </TouchableOpacity>
           ) : (!fullyDownloaded ? (
             <TouchableOpacity
               style={[styles.setupButton, { backgroundColor: colors.error }]}
-              onPress={() => handleDownloadWithRefresh(model.id, refreshFileInfo)}
+              onPress={() => handleDownload(model.id)}
               disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
             >
-              <Text style={[styles.buttonText, { color: colors.surface }]}>🔄 Download Again</Text>
+              <Ionicons name="refresh" size={20} color={colors.surface} />
+              <Text style={[styles.buttonText, { color: colors.surface }]}>Retry Download</Text>
             </TouchableOpacity>
           ) : (!ready ? (
             <TouchableOpacity
@@ -442,7 +426,10 @@ const ModelsScreen: React.FC = observer(() => {
               {isLoading || isQuickSetupLoading ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: colors.surface }]}>🔧 Initialize Model</Text>
+                <>
+                  <Ionicons name="flash" size={20} color={colors.surface} />
+                  <Text style={[styles.buttonText, { color: colors.surface }]}>Initialize Model</Text>
+                </>
               )}
             </TouchableOpacity>
           ) : (
@@ -451,29 +438,34 @@ const ModelsScreen: React.FC = observer(() => {
                 style={[
                   styles.loadButton,
                   {
-                    backgroundColor: isActive ? colors.success : colors.primary,
+                    backgroundColor: (model.type === 'tts' ? ttsService.getIsLoaded() : isActive) ? colors.success : colors.primary,
                   },
                 ]}
                 onPress={() => handleLoadModel(model.id)}
-                disabled={isLoading || isActive}
+                disabled={isLoading || (model.type === 'tts' ? ttsService.getIsLoaded() : isActive)}
               >
-                {isLoading ? (
+                {isLoading || (model.type === 'tts' ? ttsService.getIsLoading() : false) ? (
                   <ActivityIndicator color={colors.surface} size="small" />
                 ) : (
-                  <Text style={[styles.buttonText, { color: colors.surface }]}> {isActive ? 'Active' : 'Load'} </Text>
+                  <>
+                    <Ionicons name={(model.type === 'tts' ? ttsService.getIsLoaded() : isActive) ? "radio-button-on" : "play"} size={20} color={colors.surface} />
+                    <Text style={[styles.buttonText, { color: colors.surface }]}>
+                      {(model.type === 'tts' ? ttsService.getIsLoaded() : isActive) ? 'Currently Active' : `Load ${model.type === 'tts' ? 'TTS' : 'Model'}`}
+                    </Text>
+                  </>
                 )}
               </TouchableOpacity>
 
-              {isActive && (
+              {((model.type === 'tts' && ttsService.getIsLoaded()) || (model.type !== 'tts' && isActive)) && (
                 <TouchableOpacity
-                  style={[styles.releaseButton, { backgroundColor: colors.error }]}
-                  onPress={() => modelStore.releaseContext()}
+                  style={styles.releaseButton}
+                  onPress={() => model.type === 'tts' ? ttsService.cleanup() : modelStore.releaseContext()}
                 >
-                  <Text style={[styles.buttonText, { color: colors.surface }]}>Release</Text>
+                  <Ionicons name="power" size={24} color={colors.error} />
                 </TouchableOpacity>
               )}
             </View>
-          )))}
+          ))}
         </View>
       </View>
     );
@@ -483,11 +475,34 @@ const ModelsScreen: React.FC = observer(() => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
         <Text style={[styles.title, { color: colors.text }]}>
-          Language Models
+          Models
         </Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>
-          Download and manage AI models for language learning
+        <Text style={[styles.subtitle, { color: colors.text }]}>
+          Manage AI models for on-device language processing
         </Text>
+        
+        <View style={[styles.tabBar, { backgroundColor: colors.background }]}>
+          <TouchableOpacity 
+            style={[
+              styles.tab, 
+              activeTab === 'llm' && { backgroundColor: colors.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }
+            ]}
+            onPress={() => setActiveTab('llm')}
+          >
+            <Ionicons name="chatbox-ellipses" size={18} color={activeTab === 'llm' ? colors.primary : colors.muted} />
+            <Text style={[styles.tabText, { color: activeTab === 'llm' ? colors.text : colors.muted }]}>LLM Models</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[
+              styles.tab, 
+              activeTab === 'tts' && { backgroundColor: colors.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }
+            ]}
+            onPress={() => setActiveTab('tts')}
+          >
+            <Ionicons name="mic" size={18} color={activeTab === 'tts' ? colors.primary : colors.muted} />
+            <Text style={[styles.tabText, { color: activeTab === 'tts' ? colors.text : colors.muted }]}>Voice Models</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -501,25 +516,26 @@ const ModelsScreen: React.FC = observer(() => {
             styles.setupMessageBanner,
             {
               backgroundColor:
-                setupStatus === 'success' ? colors.success :
-                  setupStatus === 'error' ? colors.error :
-                    colors.primary
+                setupStatus === 'success' ? `${colors.success}20` :
+                  setupStatus === 'error' ? `${colors.error}20` :
+                    `${colors.primary}20`
             }
           ]}>
-            {setupStatus === 'progress' && (
-              <ActivityIndicator color={colors.surface} size="small" />
-            )}
-            <Text style={[styles.setupMessageText, { color: colors.surface }]}>
-              {setupStatus === 'success' ? '✅ ' : setupStatus === 'error' ? '❌ ' : ''}
+            <Ionicons 
+              name={setupStatus === 'success' ? 'checkmark-circle' : setupStatus === 'error' ? 'alert-circle' : 'information-circle'} 
+              size={24} 
+              color={setupStatus === 'success' ? colors.success : setupStatus === 'error' ? colors.error : colors.primary} 
+            />
+            <Text style={[styles.setupMessageText, { color: colors.text }]}>
               {setupMessage}
             </Text>
             {/* Retry button for error */}
             {setupStatus === 'error' && lastFailedModelId && (
               <TouchableOpacity
-                style={{ marginLeft: 12, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primary, borderRadius: 8 }}
+                style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.primary, borderRadius: 8 }}
                 onPress={() => handleRetryDownload(lastFailedModelId)}
               >
-                <Text style={{ color: colors.surface, fontWeight: 'bold' }}>Retry</Text>
+                <Text style={{ color: colors.surface, fontWeight: 'bold', fontSize: 12 }}>Retry</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -527,23 +543,57 @@ const ModelsScreen: React.FC = observer(() => {
 
         {/* Original Progress Banner (kept for compatibility) */}
         {modelStore.isQuickSetupLoading && setupStatus === 'idle' && (
-          <View style={[styles.progressBanner, { backgroundColor: colors.primary }]}>
-            <ActivityIndicator color={colors.surface} size="small" />
-            <Text style={[styles.progressText, { color: colors.surface }]}>
-              Setting up your AI model... This may take a moment.
+          <View style={[styles.progressBanner, { backgroundColor: `${colors.primary}15` }]}>
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text style={[styles.progressText, { color: colors.text, fontWeight: '600' }]}>
+              Setting up your AI model...
             </Text>
           </View>
         )}
 
-        {modelStore.models.map(renderModelCard)}
+        {modelStore.models
+          .filter(m => m.type === activeTab)
+          .map(renderModelCard)}
 
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.infoTitle, { color: colors.primary }]}>
-            ℹ️ Getting Started
-          </Text>
-          <Text style={[styles.infoText, { color: colors.text }]}>
-            {`1. Download a model (Gemma 4 E2B (Small) or Phi-4 Mini are recommended for this device)\n2. Initialize the model after download\n3. Once ready, start chatting in the Chat tab\n4. Release the model when not in use to save memory and battery`}
-          </Text>
+          <View style={styles.infoTitleRow}>
+            <Ionicons name="bulb" size={24} color={colors.warning} />
+            <Text style={[styles.infoTitle, { color: colors.text }]}>
+              Getting Started
+            </Text>
+          </View>
+          
+          {[
+            { 
+              id: 1, 
+              text: activeTab === 'llm' 
+                ? 'Download a model (Gemma 4 E2B or Phi-4 Mini recommended)' 
+                : 'Download the Kokoro-82M Voice model for offline speech' 
+            },
+            { 
+              id: 2, 
+              text: activeTab === 'llm'
+                ? 'Initialize the model once the download completes'
+                : 'Load the Voice engine to enable premium audio'
+            },
+            { 
+              id: 3, 
+              text: activeTab === 'llm'
+                ? 'Go to the Chat tab to start your conversation'
+                : 'Start a chat to hear the natural high-quality voice'
+            },
+            { 
+              id: 4, 
+              text: 'Release the model when done to free up memory' 
+            }
+          ].map((item) => (
+            <View key={item.id} style={styles.infoItem}>
+              <View style={[styles.infoStepNumber, { backgroundColor: `${colors.primary}15` }]}>
+                <Text style={[styles.infoStepText, { color: colors.primary }]}>{item.id}</Text>
+              </View>
+              <Text style={[styles.infoText, { color: colors.text }]}>{item.text}</Text>
+            </View>
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -555,176 +605,280 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 24,
+    opacity: 0.7,
+    marginBottom: 20,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    borderRadius: 16,
+    padding: 4,
+    marginTop: 8,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 40,
   },
   setupMessageBanner: {
     padding: 16,
-    marginBottom: 16,
-    borderRadius: 12,
+    marginBottom: 20,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   setupMessageText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
+    marginLeft: 12,
   },
   modelCard: {
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 20,
-    marginBottom: 16,
-    elevation: 4,
+    marginBottom: 20,
+    borderWidth: 1.5,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
   },
   modelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  modelName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-    marginRight: 12,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  modelDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  modelSize: {
-    fontSize: 12,
+    alignItems: 'center',
     marginBottom: 12,
   },
-  languagesContainer: {
+  modelName: {
+    fontSize: 20,
+    fontWeight: '800',
+    flex: 1,
+    marginRight: 12,
+    letterSpacing: -0.3,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modelDescription: {
+    fontSize: 15,
+    lineHeight: 22,
     marginBottom: 16,
+    opacity: 0.8,
+  },
+  metaInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 13,
+    fontWeight: '600',
+    opacity: 0.6,
+  },
+  languagesContainer: {
+    marginBottom: 20,
   },
   languagesLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
+    opacity: 0.5,
   },
   languagesList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   languageTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
   languageText: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
   },
   moreLanguages: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.5,
     fontStyle: 'italic',
   },
   progressContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    padding: 16,
+    borderRadius: 16,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    opacity: 0.6,
   },
   progressBar: {
     height: 8,
     borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 4,
   },
   progressFill: {
     height: '100%',
     borderRadius: 4,
   },
-  progressText: {
-    fontSize: 12,
-    textAlign: 'center',
+  progressPercentage: {
+    fontSize: 14,
+    fontWeight: '800',
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   setupButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    height: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
   },
   downloadedActions: {
     flex: 1,
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   loadButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    height: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   releaseButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
   buttonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '800',
   },
   infoCard: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 24,
+    padding: 24,
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  infoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
   },
   infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  infoItem: {
+    flexDirection: 'row',
     marginBottom: 12,
+    gap: 12,
+  },
+  infoStepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoStepText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
   infoText: {
     fontSize: 14,
     lineHeight: 20,
+    flex: 1,
+    opacity: 0.8,
   },
   progressBanner: {
     padding: 16,
-    marginBottom: 16,
-    borderRadius: 12,
+    marginBottom: 20,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
 });
 

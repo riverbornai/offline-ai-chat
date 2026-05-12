@@ -13,9 +13,10 @@ import {
 // Configuration for available models
 interface AvailableModelConfig {
   filename: string;
+  additionalFiles?: string[];
   displayName: string;
   isLocal: boolean;
-  expectedSize: number; // Added expectedSize
+  expectedSize: number;
 }
 export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
   'phi3-mini-4k-instruct': {
@@ -47,6 +48,13 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
     displayName: 'Phi-4 Mini / Reasoning (2.49GB)',
     isLocal: false,
     expectedSize: 2.49 * 1024 * 1024 * 1024
+  },
+  'kokoro-82m-v1.0': {
+    filename: 'kokoro-82m-v1.0.onnx',
+    additionalFiles: ['kokoro-voices.bin', 'kokoro-tokens.txt'],
+    displayName: 'Kokoro-82M TTS (310MB)',
+    isLocal: false,
+    expectedSize: 310 * 1024 * 1024
   }
 };
 
@@ -173,12 +181,31 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
       }
     }
 
-    // Download the model
+    // Download the main model
     const modelPath = await downloadModelToStorage(
       config.filename,
-      progress?.onDownloadProgress,
+      (p) => {
+        // If there are additional files, we need to adjust progress
+        const factor = config.additionalFiles ? 1 / (1 + config.additionalFiles.length) : 1;
+        progress?.onDownloadProgress?.(p * factor);
+      },
       progress?.onProgress
     );
+
+    // Download additional files if any
+    if (config.additionalFiles) {
+      for (let i = 0; i < config.additionalFiles.length; i++) {
+        const extraFile = config.additionalFiles[i];
+        const factor = 1 / (1 + config.additionalFiles.length);
+        const baseProgress = (i + 1) * factor;
+        
+        await downloadModelToStorage(
+          extraFile,
+          (p) => progress?.onDownloadProgress?.(baseProgress + (p * factor)),
+          (msg) => progress?.onProgress?.(`Downloading dependency: ${extraFile}...`)
+        );
+      }
+    }
 
     // Update model store
     await modelStore.setModelPath(String(modelId), String(config.filename));
