@@ -27,26 +27,21 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const getTypeIcon = (type?: string) => {
     switch (type) {
-      case 'conversation':
-        return '💬';
-      case 'translation':
-        return '🔄';
-      case 'grammar':
-        return '📝';
-      case 'vocabulary':
-        return '📖';
-      case 'pronunciation':
-        return '🗣️';
-      case 'cultural':
-        return '🌍';
-      case 'roleplay':
-        return '🎭';
-      case 'transcription':
-        return '🎤';
-      default:
-        return '';
+      case 'conversation': return '💬';
+      case 'translation': return '🔄';
+      case 'grammar': return '📝';
+      case 'vocabulary': return '📖';
+      case 'pronunciation': return '🗣️';
+      case 'cultural': return '🌍';
+      case 'roleplay': return '🎭';
+      case 'transcription': return '🎤';
+      default: return '';
     }
   };
+
+  const hasText = message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim().length > 0;
+
+  if (!hasText && message.type !== 'transcription') return null;
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
@@ -56,10 +51,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           isUser ? styles.userBubble : styles.assistantBubble,
           {
             backgroundColor: isUser ? colors.primary : colors.surface,
-            borderWidth: message.type === 'transcription' ? 1 : 0,
-            borderColor: message.type === 'transcription' ? colors.muted : 'transparent',
-            borderStyle: message.type === 'transcription' ? 'dashed' : 'solid',
+            borderColor: isUser ? colors.primary : colors.border,
+            borderWidth: isUser ? 0 : 1,
+            shadowColor: isUser ? colors.primary : '#000',
           },
+          message.type === 'transcription' && styles.transcriptionBubble
         ]}
         onPress={onPress}
         onLongPress={onLongPress}
@@ -67,7 +63,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         activeOpacity={0.8}
       >
         {message.type && (message.type === 'transcription' || !isUser) && (
-          <View style={styles.typeIndicator}>
+          <View style={[styles.typeIndicator, { backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : `${colors.primary}10` }]}>
             <Text style={styles.typeIcon}>{getTypeIcon(message.type)}</Text>
           </View>
         )}
@@ -78,24 +74,27 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             {
               color: isUser ? colors.surface : colors.text,
               fontStyle: message.type === 'transcription' ? 'italic' : 'normal',
-              opacity: message.type === 'transcription' ? 0.8 : 1,
+              opacity: message.type === 'transcription' ? 0.7 : 1,
             },
           ]}
         >
-          {message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim() || null}
+          {message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim()}
           {message.type === 'transcription' && '...'}
         </Text>
         
-        <Text
-          style={[
-            styles.timestamp,
-            {
-              color: isUser ? colors.surface : colors.muted,
-            },
-          ]}
-        >
-          {formatTime(message.timestamp)}
-        </Text>
+        <View style={styles.footer}>
+          <Text
+            style={[
+              styles.timestamp,
+              {
+                color: isUser ? colors.surface : colors.muted,
+                opacity: 0.6,
+              },
+            ]}
+          >
+            {formatTime(message.timestamp)}
+          </Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -103,8 +102,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 4,
-    paddingHorizontal: 8,
+    marginVertical: 6,
+    paddingHorizontal: 12,
   },
   userContainer: {
     alignItems: 'flex-end',
@@ -114,16 +113,13 @@ const styles = StyleSheet.create({
   },
   bubble: {
     maxWidth: '85%',
-    padding: 12,
-    borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   userBubble: {
     borderBottomRightRadius: 4,
@@ -131,28 +127,37 @@ const styles = StyleSheet.create({
   assistantBubble: {
     borderBottomLeftRadius: 4,
   },
+  transcriptionBubble: {
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
   typeIndicator: {
-    position: 'absolute',
-    top: -8,
-    left: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 12,
+    marginBottom: 6,
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
+    borderRadius: 8,
   },
   typeIcon: {
     fontSize: 12,
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
-    marginBottom: 4,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 4,
   },
   timestamp: {
-    fontSize: 12,
-    alignSelf: 'flex-end',
-    opacity: 0.7,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });
 
-export default MessageBubble; 
+export default MessageBubble;
+ 
