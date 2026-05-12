@@ -26,6 +26,9 @@ const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
   'google_gemma-4-E2B-it-IQ2_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-IQ2_M.gguf',
   'google_gemma-4-E4B-it-Q4_K_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf',
   'Phi-4-mini-instruct-Q4_K_M.gguf': 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf',
+  'kokoro-82m-v1.0.onnx': 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/model.onnx',
+  'kokoro-voices.bin': 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices.bin',
+  'kokoro-tokens.txt': 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/tokens.txt',
 };
 
 /**

@@ -12,10 +12,11 @@ import {
 } from '../utils/platformPaths';
 import { Storage } from '../utils/storage';
 
-export interface LLMModel {
+export interface AppModel {
   id: string;
   name: string;
   path: string;
+  type: 'llm' | 'tts' | 'stt';
   isDownloaded: boolean;
   isLoading: boolean;
   size?: string;
@@ -32,11 +33,12 @@ export interface CompletionParams {
 }
 
 class ModelStore {
-  models: LLMModel[] = [
+  models: AppModel[] = [
     {
       id: 'phi3-mini-4k-instruct',
       name: 'Phi-3 Mini 4K Instruct',
       path: 'model/phi-3-mini-4k-instruct-q4.gguf',
+      type: 'llm',
       isDownloaded: false,
       isLoading: false,
       size: '2.23GB',
@@ -47,6 +49,7 @@ class ModelStore {
       id: 'tinyllama-1.1b-chat-v1.0-q4_k_m',
       name: 'TinyLlama-1.1B Chat v1.0 Q4_K_M',
       path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+      type: 'llm',
       isDownloaded: false,
       isLoading: false,
       size: '638MB',
@@ -57,6 +60,7 @@ class ModelStore {
       id: 'gemma-4-e2b-it',
       name: 'Gemma 4 E2B (Small)',
       path: 'model/google_gemma-4-E2B-it-IQ2_M.gguf',
+      type: 'llm',
       isDownloaded: false,
       isLoading: false,
       size: '2.62GB',
@@ -67,6 +71,7 @@ class ModelStore {
       id: 'gemma-4-e4b-it',
       name: 'Gemma 4 E4B IT',
       path: 'model/google_gemma-4-E4B-it-Q4_K_M.gguf',
+      type: 'llm',
       isDownloaded: false,
       isLoading: false,
       size: '5.41GB',
@@ -77,11 +82,23 @@ class ModelStore {
       id: 'phi-4-mini-instruct',
       name: 'Phi-4 Mini / Reasoning',
       path: 'model/Phi-4-mini-instruct-Q4_K_M.gguf',
+      type: 'llm',
       isDownloaded: false,
       isLoading: false,
       size: '2.49GB',
       description: 'Microsoft Phi-4 Mini - Reasoning & Math specialist (94.6% MATH-500)',
       languageSupport: ['English']
+    },
+    {
+      id: 'kokoro-82m-v1.0',
+      name: 'Kokoro-82M TTS',
+      path: 'model/kokoro-82m-v1.0.onnx',
+      type: 'tts',
+      isDownloaded: false,
+      isLoading: false,
+      size: '310MB',
+      description: 'High-quality offline Text-to-Speech model. Supports human-like voices across multiple languages.',
+      languageSupport: ['English', 'French', 'Japanese', 'Korean', 'Chinese']
     }
   ];
 
@@ -154,11 +171,12 @@ class ModelStore {
 
   // Sync predefined models with persisted state
   syncModels = () => {
-    const defaultModels: LLMModel[] = [
+    const defaultModels: AppModel[] = [
       {
         id: 'phi3-mini-4k-instruct',
         name: 'Phi-3 Mini 4K Instruct',
         path: 'model/phi-3-mini-4k-instruct-q4.gguf',
+        type: 'llm',
         isDownloaded: false,
         isLoading: false,
         size: '2.23GB',
@@ -169,6 +187,7 @@ class ModelStore {
         id: 'tinyllama-1.1b-chat-v1.0-q4_k_m',
         name: 'TinyLlama-1.1B Chat v1.0 Q4_K_M',
         path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+        type: 'llm',
         isDownloaded: false,
         isLoading: false,
         size: '638MB',
@@ -179,6 +198,7 @@ class ModelStore {
         id: 'gemma-4-e2b-it',
         name: 'Gemma 4 E2B (Small)',
         path: 'model/google_gemma-4-E2B-it-IQ2_M.gguf',
+        type: 'llm',
         isDownloaded: false,
         isLoading: false,
         size: '2.62GB',
@@ -189,6 +209,7 @@ class ModelStore {
         id: 'gemma-4-e4b-it',
         name: 'Gemma 4 E4B IT',
         path: 'model/google_gemma-4-E4B-it-Q4_K_M.gguf',
+        type: 'llm',
         isDownloaded: false,
         isLoading: false,
         size: '5.41GB',
@@ -199,11 +220,23 @@ class ModelStore {
         id: 'phi-4-mini-instruct',
         name: 'Phi-4 Mini / Reasoning',
         path: 'model/Phi-4-mini-instruct-Q4_K_M.gguf',
+        type: 'llm',
         isDownloaded: false,
         isLoading: false,
         size: '2.49GB',
         description: 'Microsoft Phi-4 Mini - Reasoning & Math specialist (94.6% MATH-500)',
         languageSupport: ['English']
+      },
+      {
+        id: 'kokoro-82m-v1.0',
+        name: 'Kokoro-82M TTS',
+        path: 'model/kokoro-82m-v1.0.onnx',
+        type: 'tts',
+        isDownloaded: false,
+        isLoading: false,
+        size: '310MB',
+        description: 'High-quality offline Text-to-Speech model. Supports human-like voices across multiple languages.',
+        languageSupport: ['English', 'French', 'Japanese', 'Korean', 'Chinese']
       }
     ];
 
@@ -281,12 +314,16 @@ class ModelStore {
     }
   };
 
-  get activeModel(): LLMModel | undefined {
+  get activeModel(): AppModel | undefined {
     return this.models.find(m => m.id === this.activeModelId);
   }
 
-  get availableModels(): LLMModel[] {
-    return this.models.filter(m => m.isDownloaded);
+  get availableModels(): AppModel[] {
+    return this.models.filter(m => m.isDownloaded && m.type === 'llm');
+  }
+
+  get availableTtsModels(): AppModel[] {
+    return this.models.filter(m => m.isDownloaded && m.type === 'tts');
   }
 
   // Validate if a language is supported by the active model
@@ -316,9 +353,13 @@ class ModelStore {
     });
   };
 
-  initContext = async (model: LLMModel) => {
+  initContext = async (model: AppModel) => {
     if (!model.isDownloaded || !model.path) {
       throw new Error('Model is not downloaded or path is not set');
+    }
+
+    if (model.type !== 'llm') {
+      throw new Error('Only LLM models can be initialized as LLM context');
     }
 
     runInAction(() => {
