@@ -39,7 +39,7 @@ class ModelStore {
       path: 'model/phi-3-mini-4k-instruct-q4.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '2.23GB', // app download verified size
+      size: '2.23GB',
       description: 'Phi-3 Mini 4K Instruct model for chat',
       languageSupport: ['English']
     },
@@ -49,8 +49,38 @@ class ModelStore {
       path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
       isDownloaded: false,
       isLoading: false,
-      size: '638MB', // browser verified size
+      size: '638MB',
       description: 'TinyLlama-1.1B Chat v1.0 Q4_K_M quantized model for chat',
+      languageSupport: ['English']
+    },
+    {
+      id: 'gemma-4-e2b-it',
+      name: 'Gemma 4 E2B (Small)',
+      path: 'model/google_gemma-4-E2B-it-IQ2_M.gguf',
+      isDownloaded: false,
+      isLoading: false,
+      size: '2.62GB',
+      description: 'Google Gemma 4 E2B Multimodal - Optimized Small version (2.6GB) for devices with limited memory. Supports text, image, and audio.',
+      languageSupport: ['English', 'Spanish', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Chinese']
+    },
+    {
+      id: 'gemma-4-e4b-it',
+      name: 'Gemma 4 E4B IT',
+      path: 'model/google_gemma-4-E4B-it-Q4_K_M.gguf',
+      isDownloaded: false,
+      isLoading: false,
+      size: '5.41GB',
+      description: 'Google Gemma 4 E4B (Effective 4B) High-performance multimodal model',
+      languageSupport: ['English', 'Spanish', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Chinese']
+    },
+    {
+      id: 'phi-4-mini-instruct',
+      name: 'Phi-4 Mini / Reasoning',
+      path: 'model/Phi-4-mini-instruct-Q4_K_M.gguf',
+      isDownloaded: false,
+      isLoading: false,
+      size: '2.49GB',
+      description: 'Microsoft Phi-4 Mini - Reasoning & Math specialist (94.6% MATH-500)',
       languageSupport: ['English']
     }
   ];
@@ -122,8 +152,91 @@ class ModelStore {
     }
   };
 
+  // Sync predefined models with persisted state
+  syncModels = () => {
+    const defaultModels: LLMModel[] = [
+      {
+        id: 'phi3-mini-4k-instruct',
+        name: 'Phi-3 Mini 4K Instruct',
+        path: 'model/phi-3-mini-4k-instruct-q4.gguf',
+        isDownloaded: false,
+        isLoading: false,
+        size: '2.23GB',
+        description: 'Phi-3 Mini 4K Instruct model for chat',
+        languageSupport: ['English']
+      },
+      {
+        id: 'tinyllama-1.1b-chat-v1.0-q4_k_m',
+        name: 'TinyLlama-1.1B Chat v1.0 Q4_K_M',
+        path: 'model/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
+        isDownloaded: false,
+        isLoading: false,
+        size: '638MB',
+        description: 'TinyLlama-1.1B Chat v1.0 Q4_K_M quantized model for chat',
+        languageSupport: ['English']
+      },
+      {
+        id: 'gemma-4-e2b-it',
+        name: 'Gemma 4 E2B (Small)',
+        path: 'model/google_gemma-4-E2B-it-IQ2_M.gguf',
+        isDownloaded: false,
+        isLoading: false,
+        size: '2.62GB',
+        description: 'Google Gemma 4 E2B Multimodal - Optimized Small version (2.6GB) for devices with limited memory. Supports text, image, and audio.',
+        languageSupport: ['English', 'Spanish', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Chinese']
+      },
+      {
+        id: 'gemma-4-e4b-it',
+        name: 'Gemma 4 E4B IT',
+        path: 'model/google_gemma-4-E4B-it-Q4_K_M.gguf',
+        isDownloaded: false,
+        isLoading: false,
+        size: '5.41GB',
+        description: 'Google Gemma 4 E4B (Effective 4B) High-performance multimodal model',
+        languageSupport: ['English', 'Spanish', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Chinese']
+      },
+      {
+        id: 'phi-4-mini-instruct',
+        name: 'Phi-4 Mini / Reasoning',
+        path: 'model/Phi-4-mini-instruct-Q4_K_M.gguf',
+        isDownloaded: false,
+        isLoading: false,
+        size: '2.49GB',
+        description: 'Microsoft Phi-4 Mini - Reasoning & Math specialist (94.6% MATH-500)',
+        languageSupport: ['English']
+      }
+    ];
+
+    runInAction(() => {
+      defaultModels.forEach(defaultModel => {
+        const index = this.models.findIndex(m => m.id === defaultModel.id);
+        if (index === -1) {
+          this.models.push(defaultModel);
+        } else {
+          // Update metadata but keep dynamic state
+          const existing = this.models[index];
+          existing.name = defaultModel.name;
+          existing.size = defaultModel.size;
+          existing.description = defaultModel.description;
+          existing.languageSupport = defaultModel.languageSupport;
+          
+          // Update path if not downloaded (to fix incorrect paths from previous versions)
+          if (!existing.isDownloaded) {
+            existing.path = defaultModel.path;
+          }
+          
+          // Only update path if it's empty
+          if (!existing.path) existing.path = defaultModel.path;
+        }
+      });
+    });
+  };
+
   initializeStore = async () => {
     try {
+      // Sync models after persistence is loaded
+      this.syncModels();
+
       // Ensure model directories exist
       await ensureModelDirectories();
       
@@ -230,15 +343,22 @@ class ModelStore {
       const { initLlama } = await import('@pocketpalai/llama.rn');
       
       console.log(`Initializing model context with path: ${modelPath}`);
-      console.log(`Model settings: ctx=${this.n_context}, gpu_layers=${this.n_gpu_layers}, threads=${this.n_threads}, batch=${this.n_batch}`);
+      
+      // Use safer settings for larger/newer models on mid-range devices
+      const isLargeModel = model.id.includes('gemma-4') || model.id.includes('phi-4');
+      const finalCtx = isLargeModel ? Math.min(this.n_context, 512) : this.n_context;
+      const finalBatch = isLargeModel ? Math.min(this.n_batch, 128) : this.n_batch;
+      const useMlock = isLargeModel ? false : true; // Disable mlock for large models to prevent OOM
+      
+      console.log(`Model settings: ctx=${finalCtx}, gpu_layers=${this.n_gpu_layers}, threads=${this.n_threads}, batch=${finalBatch}, mlock=${useMlock}`);
       
       this.context = await initLlama({
         model: modelPath,
-        n_ctx: this.n_context,
+        n_ctx: finalCtx,
         n_gpu_layers: this.n_gpu_layers,
         n_threads: this.n_threads,
-        n_batch: this.n_batch,
-        use_mlock: true,
+        n_batch: finalBatch,
+        use_mlock: useMlock,
         use_mmap: true,
       });
 

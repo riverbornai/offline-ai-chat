@@ -29,6 +29,24 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
     displayName: 'TinyLlama-1.1B Chat v1.0 Q4_K_M (638MB)',
     isLocal: false,
     expectedSize: 638 * 1024 * 1024 // 638MB in bytes (browser verified)
+  },
+  'gemma-4-e2b-it': {
+    filename: 'google_gemma-4-E2B-it-IQ2_M.gguf',
+    displayName: 'Gemma 4 E2B (Small) (2.62GB)',
+    isLocal: false,
+    expectedSize: 2.62 * 1024 * 1024 * 1024
+  },
+  'gemma-4-e4b-it': {
+    filename: 'google_gemma-4-E4B-it-Q4_K_M.gguf',
+    displayName: 'Gemma 4 E4B IT (5.41GB)',
+    isLocal: false,
+    expectedSize: 5.41 * 1024 * 1024 * 1024
+  },
+  'phi-4-mini-instruct': {
+    filename: 'Phi-4-mini-instruct-Q4_K_M.gguf',
+    displayName: 'Phi-4 Mini / Reasoning (2.49GB)',
+    isLocal: false,
+    expectedSize: 2.49 * 1024 * 1024 * 1024
   }
 };
 
@@ -43,7 +61,7 @@ interface SetupProgress {
 // Helper function to set up your models with correct platform paths
 export const setupModels = async (progress?: SetupProgress) => {
   try {
-    progress?.onProgress?.('Setting up Phi-3 Mini 4K Instruct and Gemma-2B Q6 models...');
+    progress?.onProgress?.('Setting up Language Learning models (Phi-3, TinyLlama, and Gemma 4)...');
     
     // Ensure model directories exist
     await ensureModelDirectories();

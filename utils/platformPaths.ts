@@ -23,6 +23,9 @@ const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
   'phi-3-mini-4k-instruct-q4.gguf': 'https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf',
   'tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf': 'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
   'ggml-tiny.en.bin': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin',
+  'google_gemma-4-E2B-it-IQ2_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-IQ2_M.gguf',
+  'google_gemma-4-E4B-it-Q4_K_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf',
+  'Phi-4-mini-instruct-Q4_K_M.gguf': 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf',
 };
 
 /**

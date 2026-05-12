@@ -1,13 +1,13 @@
 import { observer } from 'mobx-react';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -22,7 +22,7 @@ const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { modelStore } = useStores();
-  
+
   // State for setup feedback
   const [setupMessage, setSetupMessage] = useState<string>('');
   const [setupStatus, setSetupStatus] = useState<'idle' | 'progress' | 'success' | 'error'>('idle');
@@ -39,7 +39,7 @@ const ModelsScreen: React.FC = observer(() => {
         const inProgressTask = tasks.find(
           t => t.state !== 'DONE' && t.state !== 'FAILED'
         );
-        
+
         if (inProgressTask) {
           // Map task id (filename) to model id
           const modelEntry = Object.entries(AVAILABLE_MODELS).find(
@@ -95,7 +95,7 @@ const ModelsScreen: React.FC = observer(() => {
               });
           }
         }
-        
+
         // Also check for completed downloads that might not be recognized by the UI
         for (const [modelId, config] of Object.entries(AVAILABLE_MODELS)) {
           const info = await getModelFileInfo(config.filename);
@@ -137,7 +137,7 @@ const ModelsScreen: React.FC = observer(() => {
         Alert.alert('Error', 'Model store is not initialized. Please restart the app.');
         return;
       }
-      
+
       await modelStore.initContext(model);
       Alert.alert('Success', `${model.name} loaded successfully!`);
     } catch (error) {
@@ -205,7 +205,7 @@ const ModelsScreen: React.FC = observer(() => {
       setSetupMessage('');
       setSetupStatus('progress');
       setDownloadProgress(0);
-      
+
       await quickSetup({
         onProgress: (message) => {
           setSetupMessage(message);
@@ -260,10 +260,10 @@ const ModelsScreen: React.FC = observer(() => {
       const fileExists = !!info && info.exists;
       const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
       const isComplete = fileExists && info.size >= (expectedSize - TOLERANCE);
-      
+
       setFileExists(fileExists);
       setFullyDownloaded(isComplete);
-      
+
       // Update model store if file is complete but not marked as downloaded
       if (isComplete && !model.isDownloaded) {
         if (modelStore && typeof modelStore.setModelPath === 'function') {
@@ -347,7 +347,7 @@ const ModelsScreen: React.FC = observer(() => {
           <Text style={[styles.modelName, { color: colors.text }]}>
             {model.name}
           </Text>
-          <View style={[styles.statusBadge, { 
+          <View style={[styles.statusBadge, {
             backgroundColor: ready ? colors.success : (model.isDownloaded ? colors.warning : colors.muted)
           }]}>
             <Text style={[styles.statusText, { color: colors.surface }]}>
@@ -392,18 +392,18 @@ const ModelsScreen: React.FC = observer(() => {
         {/* Download Progress Bar */}
         {(downloadingModelId === model.id && downloadProgress > 0) ? (
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: colors.background }]}> 
-              <View 
+            <View style={[styles.progressBar, { backgroundColor: colors.background }]}>
+              <View
                 style={[
-                  styles.progressFill, 
-                  { 
+                  styles.progressFill,
+                  {
                     backgroundColor: colors.primary,
                     width: `${Math.round(downloadProgress * 100)}%`
                   }
-                ]} 
+                ]}
               />
             </View>
-            <Text style={[styles.progressText, { color: colors.muted }]}> 
+            <Text style={[styles.progressText, { color: colors.muted }]}>
               {`${Math.round(downloadProgress * 100)}%`}
             </Text>
           </View>
@@ -420,7 +420,7 @@ const ModelsScreen: React.FC = observer(() => {
               {isLoading || isQuickSetupLoading || downloadingModelId === model.id ? (
                 <ActivityIndicator color={colors.surface} size="small" />
               ) : (
-                <Text style={[styles.buttonText, { color: colors.surface }]}> 
+                <Text style={[styles.buttonText, { color: colors.surface }]}>
                   📥 Download Model
                 </Text>
               )}
@@ -500,16 +500,16 @@ const ModelsScreen: React.FC = observer(() => {
           <View style={[
             styles.setupMessageBanner,
             {
-              backgroundColor: 
+              backgroundColor:
                 setupStatus === 'success' ? colors.success :
-                setupStatus === 'error' ? colors.error :
-                colors.primary
+                  setupStatus === 'error' ? colors.error :
+                    colors.primary
             }
           ]}>
             {setupStatus === 'progress' && (
               <ActivityIndicator color={colors.surface} size="small" />
             )}
-            <Text style={[styles.setupMessageText, { color: colors.surface }]}> 
+            <Text style={[styles.setupMessageText, { color: colors.surface }]}>
               {setupStatus === 'success' ? '✅ ' : setupStatus === 'error' ? '❌ ' : ''}
               {setupMessage}
             </Text>
@@ -534,7 +534,7 @@ const ModelsScreen: React.FC = observer(() => {
             </Text>
           </View>
         )}
-        
+
         {modelStore.models.map(renderModelCard)}
 
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
@@ -542,7 +542,7 @@ const ModelsScreen: React.FC = observer(() => {
             ℹ️ Getting Started
           </Text>
           <Text style={[styles.infoText, { color: colors.text }]}>
-            {`1. Download either Phi-3 Mini (2.23GB) or TinyLlama (638MB) model - requires internet connection\n2. Initialize the model after download\n3. Once ready, start chatting in the Chat tab\n4. Release the model when not in use to save memory`}
+            {`1. Download a model (Gemma 4 E2B (Small) or Phi-4 Mini are recommended for this device)\n2. Initialize the model after download\n3. Once ready, start chatting in the Chat tab\n4. Release the model when not in use to save memory and battery`}
           </Text>
         </View>
       </ScrollView>
