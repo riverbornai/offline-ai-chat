@@ -49,13 +49,19 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
     isLocal: false,
     expectedSize: 2.49 * 1024 * 1024 * 1024
   },
-  'kokoro-82m-v1.0': {
-    filename: 'kokoro-82m-v1.0.onnx',
-    additionalFiles: ['kokoro-voices.bin', 'kokoro-tokens.txt'],
-    displayName: 'Kokoro-82M TTS (310MB)',
+  'phi-4-mini-iq2_m': {
+    filename: 'phi-4-mini-iq2_m.gguf',
+    displayName: 'Phi-4 Mini (Light) (1.40GB)',
     isLocal: false,
-    expectedSize: 310 * 1024 * 1024
-  }
+    expectedSize: 1.40 * 1024 * 1024 * 1024
+  },
+  'vits-piper-en_US-amy-low': {
+    filename: 'en_US-amy-low.onnx',
+    additionalFiles: ['en_US-amy-low-tokens.txt'],
+    displayName: 'Amy Low (Piper TTS) (28MB)',
+    isLocal: false,
+    expectedSize: 28 * 1024 * 1024
+  },
 };
 
 // Interface for setup progress callbacks
@@ -89,12 +95,18 @@ export const setupModels = async (progress?: SetupProgress) => {
     for (const modelId of Object.keys(AVAILABLE_MODELS)) {
       const config = AVAILABLE_MODELS[modelId];
       const ready = await checkModelFileExists(config.filename, progress?.onProgress);
-      const fullyDownloaded = await isModelFullyDownloaded(config.filename, config.expectedSize);
+      const fullyDownloaded = await isModelFullyDownloaded(modelId);
+      
       if (ready && fullyDownloaded) {
-        progress?.onProgress?.(`Initializing ${config.displayName} model...`);
-        await initializeModel(modelId, progress);
+        // Only auto-initialize LLMs to avoid blocking the UI on startup.
+        // TTS (Kokoro) is heavy and must only be loaded on explicit user request.
+        const model = modelStore.models.find(m => m.id === modelId);
+        if (model?.type === 'llm') {
+          progress?.onProgress?.(`Initializing ${config.displayName}...`);
+          await initializeModel(modelId, progress);
+        }
       } else if (ready && !fullyDownloaded) {
-        progress?.onError?.(`${config.displayName} is not fully downloaded. Please resume download.`);
+        progress?.onError?.(`${config.displayName} is missing required dependencies or is not fully downloaded. Please resume download.`);
       } else {
         progress?.onProgress?.(`${config.displayName} model not found. Please download it first using the Models tab.`);
       }
@@ -139,10 +151,30 @@ const setupDownloadableModel = async (modelId: string, filename: string, progres
 };
 
 // Add this helper
-const isModelFullyDownloaded = async (filename: string, expectedSize: number): Promise<boolean> => {
-  const info = await getModelFileInfo(filename);
+const isModelFullyDownloaded = async (modelId: string): Promise<boolean> => {
+  const config = AVAILABLE_MODELS[modelId];
+  if (!config) return false;
+
+  const info = await getModelFileInfo(config.filename);
   const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
-  return !!info && info.exists && info.size >= (expectedSize - TOLERANCE);
+  let exists = !!info && info.exists && info.size >= (config.expectedSize - TOLERANCE);
+
+  if (exists && config.additionalFiles) {
+    for (const file of config.additionalFiles) {
+      const extraInfo = await getModelFileInfo(file);
+      if (!extraInfo || !extraInfo.exists) {
+        // Special case for Kokoro: if espeak-ng-data folder exists but archive is gone, that's fine
+        if (file.endsWith('.tar.bz2')) {
+          const folderPath = file.replace('.tar.bz2', '');
+          const folderInfo = await getModelFileInfo(folderPath);
+          if (folderInfo && folderInfo.exists) continue;
+        }
+        exists = false;
+        break;
+      }
+    }
+  }
+  return exists;
 };
 
 // Download and set up model
@@ -158,7 +190,8 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
     if (resume) {
       // Try to resume existing download
       const existingTasks = await RNBackgroundDownloader.checkForExistingDownloads();
-      const task = existingTasks.find(t => t.id === config.filename);
+      const sanitizedId = config.filename.replace(/\//g, '_');
+      const task = existingTasks.find(t => t.id === sanitizedId);
       if (task && task.state !== 'DONE' && task.state !== 'FAILED') {
         // Attach handlers to existing task
         task
@@ -189,7 +222,8 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
         const factor = config.additionalFiles ? 1 / (1 + config.additionalFiles.length) : 1;
         progress?.onDownloadProgress?.(p * factor);
       },
-      progress?.onProgress
+      progress?.onProgress,
+      config.expectedSize
     );
 
     // Download additional files if any
@@ -255,9 +289,19 @@ export const initializeModel = async (modelId: string, progress?: SetupProgress)
       throw new Error(`${modelId} model file not found. Please download it first.`);
     }
     
-    progress?.onProgress?.(`Initializing ${model.name} model context...`);
-    await modelStore.initContext(model);
-    progress?.onSuccess?.(`${model.name} model initialized and ready for chat!`);
+    console.log(`[modelSetup] Initializing model: ${model.id} (type: ${model.type})`);
+    
+    if (model.type === 'tts') {
+      const { ttsService } = await import('../services/ttsService');
+      await ttsService.initialize(model.id);
+      progress?.onSuccess?.(`${model.name} voice engine initialized and ready!`);
+    } else if (model.type === 'llm') {
+      await modelStore.initContext(model);
+      progress?.onSuccess?.(`${model.name} model initialized and ready for chat!`);
+    } else {
+      console.warn(`[modelSetup] Unsupported model type: ${model.type} for model: ${model.id}`);
+      return false;
+    }
     
     return true;
   } catch (error) {
@@ -307,10 +351,11 @@ export const quickSetup = async (progress?: SetupProgress) => {
 
 // Check if model is ready for use
 export const isModelReady = (): boolean => {
-  return Object.keys(AVAILABLE_MODELS).some(modelId => {
-    const model = modelStore.models.find(m => m.id === modelId);
-    return !!(model?.isDownloaded && modelStore.context && !modelStore.isContextLoading);
-  });
+  const { ttsService } = require('../services/ttsService');
+  const ttsReady = ttsService.getIsLoaded();
+  const llmReady = !!(modelStore.context && !modelStore.isContextLoading);
+  
+  return llmReady || ttsReady;
 };
 
 // Get model status for debugging
