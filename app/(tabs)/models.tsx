@@ -25,7 +25,7 @@ const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { modelStore } = useStores();
-  const [activeTab] = useState<'llm'>('llm');
+  const [activeTab, setActiveTab] = useState<'llm' | 'tts'>('llm');
 
   // State for setup feedback
   const [setupMessage, setSetupMessage] = useState<string>('');
@@ -549,6 +549,27 @@ const ModelCard: React.FC<{
             <Text style={[styles.subtitle, { color: colors.muted }]}>High-performance offline AI</Text>
           </View>
         </View>
+
+        <View style={[styles.tabBar, { backgroundColor: `${colors.primary}10` }]}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'llm' && { backgroundColor: colors.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }]}
+            onPress={() => setActiveTab('llm')}
+          >
+            <Ionicons name="chatbubbles" size={18} color={activeTab === 'llm' ? colors.primary : colors.muted} />
+            <Text style={[styles.tabText, { color: activeTab === 'llm' ? colors.text : colors.muted }]}>
+              AI Models
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'tts' && { backgroundColor: colors.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }]}
+            onPress={() => setActiveTab('tts')}
+          >
+            <Ionicons name="volume-high" size={18} color={activeTab === 'tts' ? colors.primary : colors.muted} />
+            <Text style={[styles.tabText, { color: activeTab === 'tts' ? colors.text : colors.muted }]}>
+              TTS Models
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -597,7 +618,9 @@ const ModelCard: React.FC<{
           </View>
         )}
 
-        {modelStore.models.map((model) => (
+        {modelStore.models
+          .filter(model => model.type === activeTab)
+          .map((model) => (
             <ModelCard
               key={model.id}
               model={model}

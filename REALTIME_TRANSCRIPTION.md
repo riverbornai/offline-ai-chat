@@ -173,7 +173,7 @@ The system includes comprehensive error handling:
 - `whisper.rn`: Core transcription engine
 - `react-native-audio-recorder-player`: Audio recording
 - `expo-file-system`: File management
-- `react-native-tts`: Text-to-speech (for responses)
+- `react-native-sherpa-onnx`: Offline TTS engine (Kokoro-82M)
 
 ## API Reference
 
