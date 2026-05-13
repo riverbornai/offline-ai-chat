@@ -26,9 +26,9 @@ const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
   'google_gemma-4-E2B-it-IQ2_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-IQ2_M.gguf',
   'google_gemma-4-E4B-it-Q4_K_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf',
   'Phi-4-mini-instruct-Q4_K_M.gguf': 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf',
-  'kokoro-82m-v1.0.onnx': 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/model.onnx',
-  'kokoro-voices.bin': 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices.bin',
-  'kokoro-tokens.txt': 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/tokens.txt',
+  'phi-4-mini-iq2_m.gguf': 'https://huggingface.co/Mungert/Phi-4-mini-instruct.gguf/resolve/main/phi-4-mini-iq2_m.gguf',
+  'en_US-amy-low.onnx': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/en_US-amy-low.onnx?download=true',
+  'en_US-amy-low-tokens.txt': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/tokens.txt?download=true',
 };
 
 /**
@@ -99,7 +99,8 @@ export const checkModelAvailableForDownload = async (filename: string): Promise<
 export const downloadModelToStorage = async (
   filename: string, 
   onProgress?: (progress: number) => void,
-  onStatusUpdate?: (message: string) => void
+  onStatusUpdate?: (message: string) => void,
+  expectedSize?: number
 ): Promise<string> => {
   const isNativePlatform = Platform.OS === 'android' || Platform.OS === 'ios';
   if (!isNativePlatform) throw new Error('Model download is only supported on native platforms');
@@ -112,17 +113,41 @@ export const downloadModelToStorage = async (
 
   // Check if file already exists and is complete
   const fileInfo = await FileSystem.getInfoAsync(modelPath);
-  if (fileInfo.exists && fileInfo.size && fileInfo.size > 100 * 1024 * 1024) { // > 100MB indicates likely complete
+  const minRequiredSize = expectedSize ? expectedSize * 0.9 : 1024; // 90% of expected size or 1KB for deps
+  
+  if (fileInfo.exists && fileInfo.size && fileInfo.size > minRequiredSize) {
     onStatusUpdate?.('Model already exists in storage');
     onProgress?.(1);
     return modelPath;
   }
 
   // Helper to start or resume download
-  const startDownload = () => {
+  const startDownload = async () => {
+    // For very small files (less than 5MB or dependencies without expectedSize), 
+    // use standard FileSystem.downloadAsync to avoid background downloader overhead/flakiness
+    const isSmallFile = expectedSize ? expectedSize < 5 * 1024 * 1024 : true;
+    
+    if (isSmallFile) {
+      onStatusUpdate?.(`Downloading ${filename}...`);
+      try {
+        const result = await FileSystem.downloadAsync(downloadUrl, modelPath);
+        if (result.status === 200) {
+          onStatusUpdate?.(`File downloaded successfully: ${filename}`);
+          onProgress?.(1);
+          return modelPath;
+        } else {
+          throw new Error(`Download failed with status ${result.status}`);
+        }
+      } catch (error) {
+        console.error(`Small file download failed for ${filename}:`, error);
+        // Fallback to background downloader if standard download fails
+      }
+    }
+
     return new Promise<string>((resolve, reject) => {
+      const sanitizedId = filename.replace(/\//g, '_');
       let task = RNBackgroundDownloader.download({
-        id: filename,
+        id: sanitizedId,
         url: downloadUrl,
         destination: modelPath.replace('file://', ''),
       })
@@ -140,12 +165,14 @@ export const downloadModelToStorage = async (
           try {
             // Verify the file exists and has reasonable size
             const finalFileInfo = await FileSystem.getInfoAsync(modelPath);
-            if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > 50 * 1024 * 1024) {
+            const verificationSize = expectedSize ? expectedSize * 0.8 : 100; // 80% or 100 bytes for tokens
+            
+            if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > verificationSize) {
               onStatusUpdate?.(`Model downloaded successfully - Final size: ${formatBytes(finalFileInfo.size)}`);
               onProgress?.(1);
               resolve(modelPath);
             } else {
-              throw new Error('Downloaded file is incomplete or corrupted');
+              throw new Error(`Downloaded file is incomplete or corrupted (Size: ${finalFileInfo.size || 0} bytes)`);
             }
           } catch (error) {
             reject(new Error(`Download verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
@@ -153,9 +180,9 @@ export const downloadModelToStorage = async (
         })
         .error(({ error, errorCode }: ErrorHandlerObject) => {
           onStatusUpdate?.('Download failed, will try to resume...');
-          // Try to resume
+          const sanitizedId = filename.replace(/\//g, '_');
           RNBackgroundDownloader.checkForExistingDownloads().then((existingTasks: DownloadTask[]) => {
-            let existing = existingTasks.find((t: DownloadTask) => t.id === filename);
+            let existing = existingTasks.find((t: DownloadTask) => t.id === sanitizedId);
             if (existing) {
               existing
                 .progress(({ bytesDownloaded, bytesTotal }: ProgressHandlerObject) => {
@@ -169,12 +196,14 @@ export const downloadModelToStorage = async (
                   try {
                     // Verify the resumed download
                     const finalFileInfo = await FileSystem.getInfoAsync(modelPath);
-                    if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > 50 * 1024 * 1024) {
+                    const verificationSize = expectedSize ? expectedSize * 0.8 : 100;
+
+                    if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > verificationSize) {
                       onStatusUpdate?.(`Model downloaded successfully (resumed) - Final size: ${formatBytes(finalFileInfo.size)}`);
                       onProgress?.(1);
                       resolve(modelPath);
                     } else {
-                      throw new Error('Resumed download is incomplete or corrupted');
+                      throw new Error(`Resumed download is incomplete or corrupted (Size: ${finalFileInfo.size || 0} bytes)`);
                     }
                   } catch (error) {
                     reject(new Error(`Resume verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
@@ -222,6 +251,14 @@ export const ensureModelDirectories = async (): Promise<void> => {
     if (!downloadDirInfo.exists) {
       await FileSystem.makeDirectoryAsync(paths.downloadDirectory, { intermediates: true });
       console.log(`Created download directory: ${paths.downloadDirectory}`);
+    }
+
+    // Create kokoro directory if it doesn't exist
+    const kokoroDir = `${paths.modelDirectory}kokoro/`;
+    const kokoroDirInfo = await FileSystem.getInfoAsync(kokoroDir);
+    if (!kokoroDirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(kokoroDir, { intermediates: true });
+      console.log(`Created kokoro directory: ${kokoroDir}`);
     }
   } catch (error) {
     console.error('Error creating model directories:', error);

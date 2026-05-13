@@ -90,15 +90,26 @@ class ModelStore {
       languageSupport: ['English']
     },
     {
-      id: 'kokoro-82m-v1.0',
-      name: 'Kokoro-82M TTS',
-      path: 'model/kokoro-82m-v1.0.onnx',
+      id: 'phi-4-mini-iq2_m',
+      name: 'Phi-4 Mini (Light)',
+      path: 'model/phi-4-mini-iq2_m.gguf',
+      type: 'llm',
+      isDownloaded: false,
+      isLoading: false,
+      size: '1.40GB',
+      description: 'Ultra-compressed Microsoft Phi-4 Mini - Optimized for low-memory devices while maintaining high reasoning capabilities.',
+      languageSupport: ['English']
+    },
+    {
+      id: 'vits-piper-en_US-amy-low',
+      name: 'Amy (Piper TTS)',
+      path: 'en_US-amy-low.onnx',
       type: 'tts',
       isDownloaded: false,
       isLoading: false,
-      size: '310MB',
-      description: 'High-quality offline Text-to-Speech model. Supports human-like voices across multiple languages.',
-      languageSupport: ['English', 'French', 'Japanese', 'Korean', 'Chinese']
+      size: '28MB',
+      description: 'Natural sounding Piper TTS model (Amy Low)',
+      languageSupport: ['English']
     }
   ];
 
@@ -142,11 +153,14 @@ class ModelStore {
       ],
       storage: Storage,
     }).then(() => {
+      // After rehydration, ensure any newly added default models are present
+      runInAction(() => {
+        this.syncModels();
+      });
       this.initializeStore();
     }).catch(console.error);
   }
 
-  // Apply platform-specific optimizations
   applyPlatformOptimizations = () => {
     if (Platform.OS === 'android') {
       // Conservative settings for Android
@@ -228,15 +242,26 @@ class ModelStore {
         languageSupport: ['English']
       },
       {
-        id: 'kokoro-82m-v1.0',
-        name: 'Kokoro-82M TTS',
-        path: 'model/kokoro-82m-v1.0.onnx',
+        id: 'phi-4-mini-iq2_m',
+        name: 'Phi-4 Mini (Light)',
+        path: 'model/phi-4-mini-iq2_m.gguf',
+        type: 'llm',
+        isDownloaded: false,
+        isLoading: false,
+        size: '1.40GB',
+        description: 'Ultra-compressed Microsoft Phi-4 Mini - Optimized for low-memory devices while maintaining high reasoning capabilities.',
+        languageSupport: ['English']
+      },
+      {
+        id: 'vits-piper-en_US-amy-low',
+        name: 'Amy (Piper TTS)',
+        path: 'en_US-amy-low.onnx',
         type: 'tts',
         isDownloaded: false,
         isLoading: false,
-        size: '310MB',
-        description: 'High-quality offline Text-to-Speech model. Supports human-like voices across multiple languages.',
-        languageSupport: ['English', 'French', 'Japanese', 'Korean', 'Chinese']
+        size: '28MB',
+        description: 'Natural sounding Piper TTS model (Amy Low)',
+        languageSupport: ['English']
       }
     ];
 
@@ -249,6 +274,7 @@ class ModelStore {
           // Update metadata but keep dynamic state
           const existing = this.models[index];
           existing.name = defaultModel.name;
+          existing.type = defaultModel.type; // Added type sync
           existing.size = defaultModel.size;
           existing.description = defaultModel.description;
           existing.languageSupport = defaultModel.languageSupport;
@@ -294,8 +320,11 @@ class ModelStore {
     for (const model of this.models) {
       if (model.path) {
         try {
-          const exists = await checkModelFileExists(model.path.split('/').pop() || '');
-          const info = await getModelFileInfo(model.path.split('/').pop() || '');
+          const relativePath = model.path.includes('models/') 
+            ? model.path.split('models/').pop() || ''
+            : model.path;
+          const exists = await checkModelFileExists(relativePath);
+          const info = await getModelFileInfo(relativePath);
           
           runInAction(() => {
             model.isDownloaded = exists;
@@ -354,11 +383,14 @@ class ModelStore {
   };
 
   initContext = async (model: AppModel) => {
+    console.log(`[ModelStore] Initializing context for model: ${model.id} (${model.type})`);
+    
     if (!model.isDownloaded || !model.path) {
       throw new Error('Model is not downloaded or path is not set');
     }
 
     if (model.type !== 'llm') {
+      console.error(`[ModelStore] Attempted to initContext for non-LLM model: ${model.id} (type: ${model.type})`);
       throw new Error('Only LLM models can be initialized as LLM context');
     }
 
@@ -373,8 +405,12 @@ class ModelStore {
       }
 
       // Validate model file exists
-      const modelPath = await getModelFilePath(model.path.split('/').pop() || '');
-      const modelExists = await checkModelFileExists(model.path.split('/').pop() || '');
+      const relativePath = model.path.includes('models/') 
+        ? model.path.split('models/').pop() || ''
+        : model.path;
+      
+      const modelPath = await getModelFilePath(relativePath);
+      const modelExists = await checkModelFileExists(relativePath);
       
       if (!modelExists) {
         throw new Error(`Model file not found at path: ${modelPath}`);
@@ -389,11 +425,11 @@ class ModelStore {
       const isLargeModel = model.id.includes('gemma-4') || model.id.includes('phi-4');
       const finalCtx = isLargeModel ? Math.min(this.n_context, 512) : this.n_context;
       const finalBatch = isLargeModel ? Math.min(this.n_batch, 128) : this.n_batch;
-      const useMlock = isLargeModel ? false : true; // Disable mlock for large models to prevent OOM
+      const useMlock = Platform.OS === 'android' ? false : (isLargeModel ? false : true); // Disable mlock for all models on Android and large models on other platforms to prevent OOM
       
       console.log(`Model settings: ctx=${finalCtx}, gpu_layers=${this.n_gpu_layers}, threads=${this.n_threads}, batch=${finalBatch}, mlock=${useMlock}`);
       
-      this.context = await initLlama({
+      const newContext = await initLlama({
         model: modelPath,
         n_ctx: finalCtx,
         n_gpu_layers: this.n_gpu_layers,
@@ -404,6 +440,7 @@ class ModelStore {
       });
 
       runInAction(() => {
+        this.context = newContext;
         this.activeModelId = model.id;
         this.isContextLoading = false;
       });
@@ -695,8 +732,10 @@ class ModelStore {
     if (!model || !model.path) return false;
 
     try {
-      const filename = model.path.split('/').pop() || '';
-      const exists = await checkModelFileExists(filename, onProgress);
+      const relativePath = model.path.includes('models/') 
+        ? model.path.split('models/').pop() || ''
+        : model.path;
+      const exists = await checkModelFileExists(relativePath, onProgress);
       
       runInAction(() => {
         model.isDownloaded = exists;

@@ -17,7 +17,7 @@ import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } fro
 import { useStores } from '../../components/StoreProvider';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
-import { AVAILABLE_MODELS, downloadModel, isModelReady, quickSetup } from '../../utils/modelSetup';
+import { AVAILABLE_MODELS, downloadModel, quickSetup } from '../../utils/modelSetup';
 import { formatBytes, getModelFileInfo } from '../../utils/platformPaths';
 import { ttsService } from '../../services/ttsService';
 
@@ -25,7 +25,7 @@ const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { modelStore } = useStores();
-  const [activeTab, setActiveTab] = useState<'llm' | 'tts'>('llm');
+  const [activeTab] = useState<'llm'>('llm');
 
   // State for setup feedback
   const [setupMessage, setSetupMessage] = useState<string>('');
@@ -117,7 +117,8 @@ const ModelsScreen: React.FC = observer(() => {
         console.error('Error checking existing downloads:', error);
       }
     })();
-  }, [modelStore.models.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount only — setModelPath mutations must NOT retrigger this
 
   // Helper to check if model is fully downloaded
   const isFullyDownloaded = async (model: typeof modelStore.models[1]) => {
@@ -181,6 +182,11 @@ const ModelsScreen: React.FC = observer(() => {
             setSetupMessage(message);
             setSetupStatus('success');
             setDownloadProgress(1);
+            
+            // Automatically initialize the model after successful download
+            console.log(`Download successful for ${modelId}, auto-initializing...`);
+            handleLoadModel(modelId);
+            
             setTimeout(() => {
               setSetupStatus('idle');
               setSetupMessage('');
@@ -253,255 +259,295 @@ const ModelsScreen: React.FC = observer(() => {
     }
   };
 
-  const renderModelCard = (model: typeof modelStore.models[1]) => {
-    const isActive = modelStore.activeModelId === model.id;
-    const isLoading = model.isLoading || (modelStore.isContextLoading && modelStore.activeModelId === model.id);
-    const isQuickSetupLoading = modelStore.isQuickSetupLoading;
-    const ready = isModelReady();
-    const config = AVAILABLE_MODELS[model.id];
-    const expectedSize = config?.expectedSize || 0;
-    const [fileExists, setFileExists] = React.useState(false);
-    const [fullyDownloaded, setFullyDownloaded] = React.useState(false);
+const ModelCard: React.FC<{
+  model: any;
+  colors: any;
+  downloadingModelId: string | null;
+  downloadProgress: number;
+  handleDownload: (id: string) => void;
+  handleLoadModel: (id: string) => void;
+  handleQuickSetup: () => void;
+}> = observer(({
+  model,
+  colors,
+  downloadingModelId,
+  downloadProgress,
+  handleDownload,
+  handleLoadModel,
+  handleQuickSetup,
+}) => {
+  const { modelStore } = useStores();
+  const isActive = modelStore.activeModelId === model.id;
+  const isLoading = model.isLoading || (modelStore.isContextLoading && modelStore.activeModelId === model.id);
+  const isQuickSetupLoading = modelStore.isQuickSetupLoading;
+  const config = AVAILABLE_MODELS[model.id];
+  const expectedSize = config?.expectedSize || 0;
+  const [fileExists, setFileExists] = React.useState(false);
+  const [fullyDownloaded, setFullyDownloaded] = React.useState(false);
+  // Local reactive state for TTS service (ttsService is not a MobX store)
+  const [ttsLoaded, setTtsLoaded] = React.useState(false);
+  const [ttsLoading, setTtsLoading] = React.useState(false);
 
-    // Helper to refresh file info
-    const refreshFileInfo = async () => {
-      const info = await getModelFileInfo(String(config.filename));
-      const fileExists = !!info && info.exists;
-      const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
-      const isComplete = fileExists && info.size >= (expectedSize - TOLERANCE);
-
-      setFileExists(fileExists);
-      setFullyDownloaded(isComplete);
-
-      // Update model store if file is complete but not marked as downloaded
-      if (isComplete && !model.isDownloaded) {
-        if (modelStore && typeof modelStore.setModelPath === 'function') {
-          modelStore.setModelPath(model.id, config.filename);
+  // Helper to refresh file info
+  const refreshFileInfo = async () => {
+    // Check main file
+    const info = await getModelFileInfo(String(config.filename));
+    let exists = !!info && info.exists;
+    
+    // For models with multiple files (like Kokoro), check all of them
+    if (exists && config.additionalFiles && config.additionalFiles.length > 0) {
+      for (const file of config.additionalFiles) {
+        const extraInfo = await getModelFileInfo(file);
+        if (!extraInfo || !extraInfo.exists) {
+          // Special case for Kokoro: if espeak-ng-data folder exists but archive is gone, that's fine
+          if (file.endsWith('.tar.bz2')) {
+            const folderPath = file.replace('.tar.bz2', '');
+            const folderInfo = await getModelFileInfo(folderPath);
+            if (folderInfo && folderInfo.exists) continue;
+          }
+          exists = false;
+          break;
         }
       }
+    }
+
+    const TOLERANCE = 50 * 1024 * 1024; // 50MB tolerance for large models
+    const isComplete = exists && (info ? info.size >= (expectedSize - TOLERANCE) : false);
+
+    setFileExists(exists);
+    setFullyDownloaded(isComplete);
+
+    // Update model store if file is complete but not marked as downloaded
+    if (isComplete && !model.isDownloaded) {
+      if (modelStore && typeof modelStore.setModelPath === 'function') {
+        modelStore.setModelPath(model.id, config.filename);
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    refreshFileInfo();
+  }, [model.id, model.isDownloaded]);
+
+  // Sync TTS service state into local state so the card re-renders correctly
+  React.useEffect(() => {
+    if (model.type !== 'tts') return;
+    const sync = () => {
+      setTtsLoaded(ttsService.getIsLoaded());
+      setTtsLoading(ttsService.getIsLoading());
     };
+    sync();
+    const interval = setInterval(sync, 500);
+    return () => clearInterval(interval);
+  }, [model.type]);
 
-    React.useEffect(() => {
-      refreshFileInfo();
-    }, [model.id, model.isDownloaded]);
+  const getStatusInfo = () => {
+    if (downloadingModelId === model.id) return { label: 'Downloading...', color: colors.primary, icon: 'cloud-download' as const };
+    if (isQuickSetupLoading) return { label: 'Setting up...', color: colors.warning, icon: 'construct' as const };
+    
+    const isLoaded = model.type === 'tts'
+      ? ttsLoaded
+      : (modelStore.activeModelId === model.id && !modelStore.isContextLoading);
+    
+    if (isLoaded) return { label: 'Active', color: colors.success, icon: 'checkmark-circle' as const };
+    if (model.isDownloaded) return { label: 'Downloaded', color: colors.secondary, icon: 'save' as const };
+    return { label: 'Available', color: colors.muted, icon: 'cloud-outline' as const };
+  };
 
-    const getStatusInfo = () => {
-      if (downloadingModelId === model.id) return { label: 'Downloading...', color: colors.primary, icon: 'cloud-download' as const };
-      if (isQuickSetupLoading) return { label: 'Setting up...', color: colors.warning, icon: 'construct' as const };
-      
-      const isLoaded = model.type === 'tts' 
-        ? ttsService.getIsLoaded() 
-        : (modelStore.activeModelId === model.id && !modelStore.isContextLoading);
-      
-      if (isLoaded) return { label: 'Active', color: colors.success, icon: 'checkmark-circle' as const };
-      if (model.isDownloaded) return { label: 'Downloaded', color: colors.secondary, icon: 'save' as const };
-      return { label: 'Available', color: colors.muted, icon: 'cloud-outline' as const };
-    };
+  const status = getStatusInfo();
 
-    const status = getStatusInfo();
-
-    return (
-      <View
-        key={model.id}
-        style={[
-          styles.modelCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: isActive ? colors.primary : colors.border,
-          },
-        ]}
-      >
-        <View style={styles.modelHeader}>
-          <Text style={[styles.modelName, { color: colors.text }]}>
-            {model.name}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: `${status.color}15` }]}>
-            <Ionicons name={status.icon} size={14} color={status.color} />
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.label}
-            </Text>
-          </View>
-        </View>
-
-        <Text style={[styles.modelDescription, { color: colors.text }]}>
-          {model.description}
+  return (
+    <View
+      key={model.id}
+      style={[
+        styles.modelCard,
+        {
+          backgroundColor: colors.surface,
+          borderColor: isActive ? colors.primary : colors.border,
+        },
+      ]}
+    >
+      <View style={styles.modelHeader}>
+        <Text style={[styles.modelName, { color: colors.text }]}>
+          {model.name}
         </Text>
-
-        <View style={styles.metaInfoRow}>
-          <View style={styles.metaItem}>
-            <Ionicons name="resize" size={16} color={colors.muted} />
-            <Text style={[styles.metaText, { color: colors.text }]}>{model.size}</Text>
-          </View>
-          {model.languageSupport && (
-            <View style={styles.metaItem}>
-              <Ionicons name="language" size={16} color={colors.muted} />
-              <Text style={[styles.metaText, { color: colors.text }]}>
-                {model.languageSupport.length} Languages
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {model.languageSupport && (
-          <View style={styles.languagesContainer}>
-            <Text style={[styles.languagesLabel, { color: colors.text }]}>
-              SUPPORTED LANGUAGES
-            </Text>
-            <View style={styles.languagesList}>
-              {model.languageSupport.slice(0, 4).map((lang) => (
-                <View
-                  key={lang}
-                  style={[styles.languageTag, { backgroundColor: colors.background }]}
-                >
-                  <Text style={[styles.languageText, { color: colors.text }]}>
-                    {lang}
-                  </Text>
-                </View>
-              ))}
-              {model.languageSupport.length > 4 && (
-                <Text style={[styles.moreLanguages, { color: colors.text }]}>
-                  +{model.languageSupport.length - 4} more
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Download Progress Bar */}
-        {(downloadingModelId === model.id && downloadProgress > 0) ? (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressHeader}>
-              <Text style={[styles.progressLabel, { color: colors.text }]}>Downloading Model...</Text>
-              <Text style={[styles.progressPercentage, { color: colors.primary }]}>
-                {`${Math.round(downloadProgress * 100)}%`}
-              </Text>
-            </View>
-            <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: colors.primary,
-                    width: `${Math.round(downloadProgress * 100)}%`
-                  }
-                ]}
-              />
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.actionButtons}>
-          {!fileExists ? (
-            <TouchableOpacity
-              style={[styles.setupButton, { backgroundColor: colors.primary }]}
-              onPress={() => handleDownload(model.id)}
-              disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
-            >
-              {isLoading || isQuickSetupLoading || downloadingModelId === model.id ? (
-                <ActivityIndicator color={colors.surface} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="cloud-download" size={20} color={colors.surface} />
-                  <Text style={[styles.buttonText, { color: colors.surface }]}>
-                    Download Model
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ) : (!fullyDownloaded ? (
-            <TouchableOpacity
-              style={[styles.setupButton, { backgroundColor: colors.error }]}
-              onPress={() => handleDownload(model.id)}
-              disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
-            >
-              <Ionicons name="refresh" size={20} color={colors.surface} />
-              <Text style={[styles.buttonText, { color: colors.surface }]}>Retry Download</Text>
-            </TouchableOpacity>
-          ) : (!ready ? (
-            <TouchableOpacity
-              style={[styles.setupButton, { backgroundColor: colors.warning }]}
-              onPress={handleQuickSetup}
-              disabled={isLoading || isQuickSetupLoading}
-            >
-              {isLoading || isQuickSetupLoading ? (
-                <ActivityIndicator color={colors.surface} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="flash" size={20} color={colors.surface} />
-                  <Text style={[styles.buttonText, { color: colors.surface }]}>Initialize Model</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.downloadedActions}>
-              <TouchableOpacity
-                style={[
-                  styles.loadButton,
-                  {
-                    backgroundColor: (model.type === 'tts' ? ttsService.getIsLoaded() : isActive) ? colors.success : colors.primary,
-                  },
-                ]}
-                onPress={() => handleLoadModel(model.id)}
-                disabled={isLoading || (model.type === 'tts' ? ttsService.getIsLoaded() : isActive)}
-              >
-                {isLoading || (model.type === 'tts' ? ttsService.getIsLoading() : false) ? (
-                  <ActivityIndicator color={colors.surface} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name={(model.type === 'tts' ? ttsService.getIsLoaded() : isActive) ? "radio-button-on" : "play"} size={20} color={colors.surface} />
-                    <Text style={[styles.buttonText, { color: colors.surface }]}>
-                      {(model.type === 'tts' ? ttsService.getIsLoaded() : isActive) ? 'Currently Active' : `Load ${model.type === 'tts' ? 'TTS' : 'Model'}`}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {((model.type === 'tts' && ttsService.getIsLoaded()) || (model.type !== 'tts' && isActive)) && (
-                <TouchableOpacity
-                  style={styles.releaseButton}
-                  onPress={() => model.type === 'tts' ? ttsService.cleanup() : modelStore.releaseContext()}
-                >
-                  <Ionicons name="power" size={24} color={colors.error} />
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
+        <View style={[styles.statusBadge, { backgroundColor: `${status.color}15` }]}>
+          <Ionicons name={status.icon} size={14} color={status.color} />
+          <Text style={[styles.statusText, { color: status.color }]}>
+            {status.label}
+          </Text>
         </View>
       </View>
-    );
-  };
+
+      <Text style={[styles.modelDescription, { color: colors.text }]}>
+        {model.description}
+      </Text>
+
+      <View style={styles.metaInfoRow}>
+        <View style={styles.metaItem}>
+          <Ionicons name="resize" size={16} color={colors.muted} />
+          <Text style={[styles.metaText, { color: colors.text }]}>{model.size}</Text>
+        </View>
+        {model.languageSupport && (
+          <View style={styles.metaItem}>
+            <Ionicons name="language" size={16} color={colors.muted} />
+            <Text style={[styles.metaText, { color: colors.text }]}>
+              {model.languageSupport.length} Languages
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {model.languageSupport && (
+        <View style={styles.languagesContainer}>
+          <Text style={[styles.languagesLabel, { color: colors.text }]}>
+            SUPPORTED LANGUAGES
+          </Text>
+          <View style={styles.languagesList}>
+            {model.languageSupport.slice(0, 4).map((lang: string) => (
+              <View
+                key={lang}
+                style={[styles.languageTag, { backgroundColor: colors.background }]}
+              >
+                <Text style={[styles.languageText, { color: colors.text }]}>
+                  {lang}
+                </Text>
+              </View>
+            ))}
+            {model.languageSupport.length > 4 && (
+              <Text style={[styles.moreLanguages, { color: colors.text }]}>
+                +{model.languageSupport.length - 4} more
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Download Progress Bar */}
+      {(downloadingModelId === model.id && downloadProgress > 0) ? (
+        <View style={styles.progressContainer}>
+          <View style={styles.progressHeader}>
+            <Text style={[styles.progressLabel, { color: colors.text }]}>Downloading Model...</Text>
+            <Text style={[styles.progressPercentage, { color: colors.primary }]}>
+              {`${Math.round(downloadProgress * 100)}%`}
+            </Text>
+          </View>
+          <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: colors.primary,
+                  width: `${Math.round(downloadProgress * 100)}%`
+                }
+              ]}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.actionButtons}>
+        {!fileExists ? (
+          <TouchableOpacity
+            style={[styles.setupButton, { backgroundColor: colors.primary }]}
+            onPress={() => handleDownload(model.id)}
+            disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
+          >
+            {isLoading || isQuickSetupLoading || downloadingModelId === model.id ? (
+              <ActivityIndicator color={colors.surface} size="small" />
+            ) : (
+              <>
+                <Ionicons name="cloud-download" size={20} color={colors.surface} />
+                <Text style={[styles.buttonText, { color: colors.surface }]}>
+                  Download Model
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (!fullyDownloaded ? (
+          <TouchableOpacity
+            style={[styles.setupButton, { backgroundColor: colors.error }]}
+            onPress={() => handleDownload(model.id)}
+            disabled={isLoading || isQuickSetupLoading || downloadingModelId === model.id}
+          >
+            <Ionicons name="refresh" size={20} color={colors.surface} />
+            <Text style={[styles.buttonText, { color: colors.surface }]}>Retry Download</Text>
+          </TouchableOpacity>
+        ) : (!ttsLoaded && !isActive ? (
+          // "Initialize" button — calls handleLoadModel which routes to ttsService.initialize() for TTS
+          // and modelStore.initContext() for LLMs
+          <TouchableOpacity
+            style={[styles.setupButton, { backgroundColor: colors.warning }]}
+            onPress={() => handleLoadModel(model.id)}
+            disabled={isLoading || isQuickSetupLoading || ttsLoading || (model.type === 'tts' ? ttsLoaded : isActive)}
+          >
+            {isLoading || isQuickSetupLoading || ttsLoading ? (
+              <ActivityIndicator color={colors.surface} size="small" />
+            ) : (
+              <>
+                <Ionicons name="flash" size={20} color={colors.surface} />
+                <Text style={[styles.buttonText, { color: colors.surface }]}>Initialize Model</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.downloadedActions}>
+            <TouchableOpacity
+              style={[
+                styles.loadButton,
+                {
+                  backgroundColor: (model.type === 'tts' ? ttsLoaded : isActive) ? colors.success : colors.primary,
+                },
+              ]}
+              onPress={() => handleLoadModel(model.id)}
+              disabled={isLoading || ttsLoading || (model.type === 'tts' ? ttsLoaded : isActive)}
+            >
+              {isLoading || ttsLoading ? (
+                <ActivityIndicator color={colors.surface} size="small" />
+              ) : (
+                <>
+                  <Ionicons name={(model.type === 'tts' ? ttsLoaded : isActive) ? "radio-button-on" : "play"} size={20} color={colors.surface} />
+                  <Text style={[styles.buttonText, { color: colors.surface }]}>
+                    {(model.type === 'tts' ? ttsLoaded : isActive) ? 'Currently Active' : `Load ${model.type === 'tts' ? 'TTS' : 'Model'}`}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {((model.type === 'tts' && ttsLoaded) || (model.type !== 'tts' && isActive)) && (
+              <TouchableOpacity
+                style={styles.releaseButton}
+                onPress={() => {
+                  if (model.type === 'tts') {
+                    ttsService.cleanup().then(() => {
+                      setTtsLoaded(false);
+                      setTtsLoading(false);
+                    });
+                  } else {
+                    modelStore.releaseContext();
+                  }
+                }}
+              >
+                <Ionicons name="power" size={24} color={colors.error} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )))}
+      </View>
+    </View>
+  );
+});
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          Models
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.text }]}>
-          Manage AI models for on-device language processing
-        </Text>
-        
-        <View style={[styles.tabBar, { backgroundColor: colors.background }]}>
-          <TouchableOpacity 
-            style={[
-              styles.tab, 
-              activeTab === 'llm' && { backgroundColor: colors.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }
-            ]}
-            onPress={() => setActiveTab('llm')}
-          >
-            <Ionicons name="chatbox-ellipses" size={18} color={activeTab === 'llm' ? colors.primary : colors.muted} />
-            <Text style={[styles.tabText, { color: activeTab === 'llm' ? colors.text : colors.muted }]}>LLM Models</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[
-              styles.tab, 
-              activeTab === 'tts' && { backgroundColor: colors.surface, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }
-            ]}
-            onPress={() => setActiveTab('tts')}
-          >
-            <Ionicons name="mic" size={18} color={activeTab === 'tts' ? colors.primary : colors.muted} />
-            <Text style={[styles.tabText, { color: activeTab === 'tts' ? colors.text : colors.muted }]}>Voice Models</Text>
-          </TouchableOpacity>
+        <View style={styles.headerTitleContainer}>
+          <Ionicons name="hardware-chip-outline" size={32} color={colors.primary} />
+          <View>
+            <Text style={[styles.title, { color: colors.text }]}>Local Models</Text>
+            <Text style={[styles.subtitle, { color: colors.muted }]}>High-performance offline AI</Text>
+          </View>
         </View>
       </View>
 
@@ -551,9 +597,18 @@ const ModelsScreen: React.FC = observer(() => {
           </View>
         )}
 
-        {modelStore.models
-          .filter(m => m.type === activeTab)
-          .map(renderModelCard)}
+        {modelStore.models.map((model) => (
+            <ModelCard
+              key={model.id}
+              model={model}
+              colors={colors}
+              downloadingModelId={downloadingModelId}
+              downloadProgress={downloadProgress}
+              handleDownload={handleDownload}
+              handleLoadModel={handleLoadModel}
+              handleQuickSetup={handleQuickSetup}
+            />
+          ))}
 
         <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
           <View style={styles.infoTitleRow}>
