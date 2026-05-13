@@ -468,17 +468,58 @@ class ModelStore {
   };
 
   releaseContext = async () => {
-    if (this.context) {
-      try {
-        await this.context.release();
-        runInAction(() => {
-          this.context = undefined;
-          this.activeModelId = undefined;
-        });
-        console.log('Context released');
-      } catch (error) {
-        console.error('Failed to release context:', error);
+    if (!this.context) {
+      runInAction(() => {
+        this.activeModelId = undefined;
+      });
+      return;
+    }
+
+    console.log(`[ModelStore] Releasing context for model: ${this.activeModelId}`);
+    
+    // Store context reference and clear state immediately to unblock UI and prevent race conditions
+    const ctxToRelease = this.context;
+    runInAction(() => {
+      this.context = undefined;
+      this.activeModelId = undefined;
+      this.isInferencing = false;
+    });
+
+    try {
+      // Attempt to release the specific context
+      // NOTE: Some versions of @pocketpalai/llama.rn on Android (Old Arch) 
+      // have a bug where releaseContext is not exported to JS.
+      if (ctxToRelease && typeof ctxToRelease.release === 'function') {
+        await ctxToRelease.release();
+        console.log('[ModelStore] Context released successfully');
       }
+    } catch (error) {
+      // Check if it's the known missing native function error
+      const errorStr = String(error);
+      const isKnownBug = errorStr.includes('releaseContext is not a function') || 
+                        errorStr.includes('undefined is not a function');
+      
+      if (isKnownBug) {
+        console.warn('[ModelStore] Native releaseContext is missing (known library bug). Trying fallback...');
+      } else {
+        console.error('[ModelStore] Failed to release specific context:', error);
+      }
+      
+      // Fallback: Try to release all contexts if specific release fails
+      try {
+        const { releaseAllLlama } = await import('@pocketpalai/llama.rn');
+        if (typeof releaseAllLlama === 'function') {
+          await releaseAllLlama();
+          console.log('[ModelStore] All contexts released as fallback');
+        }
+      } catch (fallbackError) {
+        // Only log fallback error if it's not the same missing function issue
+        if (!String(fallbackError).includes('is not a function')) {
+          console.error('[ModelStore] Fallback release also failed:', fallbackError);
+        }
+      }
+    } finally {
+      console.log('[ModelStore] Store state cleanup complete');
     }
   };
 
