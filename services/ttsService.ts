@@ -1,10 +1,14 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Speech from 'expo-speech';
-import { saveAudioToFile } from 'react-native-sherpa-onnx/tts';
-import SherpaOnnx from 'react-native-sherpa-onnx/src/NativeSherpaOnnx';
+import { saveAudioToFile, detectTtsModel } from 'react-native-sherpa-onnx/tts';
 import { Audio } from 'expo-av';
-import { getPlatformPaths } from '../utils/platformPaths';
+import { getPlatformPaths, getModelFilePath } from '../utils/platformPaths';
+import { modelStore } from '../stores/ModelStore';
+
+// Import the native bridge directly to bypass high-level API bugs and ensure type safety
+// @ts-ignore
+import SherpaOnnxNative from 'react-native-sherpa-onnx/src/NativeSherpaOnnx';
 
 export interface TTSOptions {
   speakerId?: number;
@@ -15,101 +19,185 @@ export interface TTSOptions {
 class TTSService {
   private isLoaded: boolean = false;
   private isLoading: boolean = false;
-  private instanceId: string | null = null;
-  private currentModelId: string | null = null;
+  private engine: any = null;
+  private activeModelId: string | null = null;
   private sound: Audio.Sound | null = null;
   private useSystemTTS: boolean = false;
-
-  constructor() {
-    this.instanceId = `tts_${Date.now()}`;
-  }
+  private initPromise: Promise<void> | null = null;
 
   async initialize(modelId: string = 'vits-piper-en_US-amy-low'): Promise<void> {
-    if (this.isLoading) return;
+    if (this.isLoaded && this.activeModelId === modelId && this.engine) return;
     
-    // If we've already decided to use system TTS, we're "loaded"
-    if (this.useSystemTTS) {
-      this.isLoaded = true;
-      return;
+    if (this.initPromise) {
+      console.log('[TTSService] Waiting for existing initialization...');
+      return this.initPromise;
     }
 
-    console.log(`[TTSService] Initializing with model: ${modelId}`);
     this.isLoading = true;
+    this.initPromise = (async () => {
+      try {
+        console.log(`[TTSService] Initializing model: ${modelId}`);
 
-    try {
-      const paths = await getPlatformPaths();
-      const modelDir = paths.modelDirectory;
-      const amyDir = `${modelDir}vits-piper-en_US-amy-low/`;
-      
-      // 1. Ensure directory exists
-      const amyDirInfo = await FileSystem.getInfoAsync(amyDir);
-      if (!amyDirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(amyDir, { intermediates: true });
-      }
-
-      // 2. Map existing files to required Sherpa-Onnx names
-      const originalOnnx = `${modelDir}en_US-amy-low.onnx`;
-      const originalTokens = `${modelDir}en_US-amy-low-tokens.txt`;
-      const targetOnnx = `${amyDir}model.onnx`;
-      const targetTokens = `${amyDir}tokens.txt`;
-
-      // Check if original files exist
-      const onnxExists = await FileSystem.getInfoAsync(originalOnnx);
-      const tokensExists = await FileSystem.getInfoAsync(originalTokens);
-
-      if (!onnxExists.exists) {
-        console.warn('[TTSService] Amy ONNX file not found at:', originalOnnx);
-        this.useSystemTTS = true;
-      } else {
-        // Copy files if they don't exist in the target directory yet
-        if (!(await FileSystem.getInfoAsync(targetOnnx)).exists) {
-          await FileSystem.copyAsync({ from: originalOnnx, to: targetOnnx });
-        }
-        if (tokensExists.exists && !(await FileSystem.getInfoAsync(targetTokens)).exists) {
-          await FileSystem.copyAsync({ from: originalTokens, to: targetTokens });
+        const model = modelStore.models.find((m) => m.id === modelId);
+        if (!model || !model.isDownloaded) {
+          throw new Error(`Model ${modelId} not found or not downloaded`);
         }
 
-        const nativePath = amyDir.endsWith('/') ? amyDir.slice(0, -1) : amyDir;
-        const finalNativePath = nativePath.replace('file://', '');
+        // 1. Cleanup existing engine
+        if (this.engine) {
+          try {
+            await this.engine.destroy();
+          } catch (e) {
+            console.warn('[TTSService] Error destroying previous engine:', e);
+          }
+          this.engine = null;
+        }
+
+        // 2. Isolate Piper model files into a dedicated directory
+        // SherpaOnnx works best when the model directory only contains the relevant model files.
+        const paths = await getPlatformPaths();
+        const piperDir = `${paths.modelDirectory}piper/`;
         
-        console.log(`[TTSService] Initializing native SherpaOnnx at ${finalNativePath}`);
+        // Ensure piper directory exists
+        const piperDirInfo = await FileSystem.getInfoAsync(piperDir);
+        if (!piperDirInfo.exists) {
+          await FileSystem.makeDirectoryAsync(piperDir, { intermediates: true });
+        }
+
+        const modelPath = model.path.startsWith('/') || model.path.startsWith('file://')
+          ? model.path
+          : await getModelFilePath(model.path);
         
-        const result = await SherpaOnnx.initializeTts(
-          this.instanceId!,
-          finalNativePath,
-          'vits',
-          1,            // numThreads
-          false,        // debug
-          Number.NaN,   // noiseScale
-          Number.NaN,   // noiseScaleW
-          Number.NaN,   // lengthScale
-          '',           // ruleFsts
-          '',           // ruleFars
-          Number.NaN,   // maxNumSentences
-          Number.NaN,   // silenceScale
-          'cpu'         // provider
+        const originalOnnx = modelPath.replace('file://', '');
+        const originalTokens = originalOnnx.replace('.onnx', '-tokens.txt');
+        const targetOnnx = `${piperDir}model.onnx`.replace('file://', '');
+        const targetTokens = `${piperDir}tokens.txt`.replace('file://', '');
+
+        console.log('[TTSService] Isolating Piper files...');
+        
+        // Copy files to dedicated directory if they don't exist there yet
+        if (!(await FileSystem.getInfoAsync(`file://${targetOnnx}`)).exists) {
+          await FileSystem.copyAsync({ from: `file://${originalOnnx}`, to: `file://${targetOnnx}` });
+        }
+        
+        const tokensSourceInfo = await FileSystem.getInfoAsync(`file://${originalTokens}`);
+        if (tokensSourceInfo.exists && !(await FileSystem.getInfoAsync(`file://${targetTokens}`)).exists) {
+          await FileSystem.copyAsync({ from: `file://${originalTokens}`, to: `file://${targetTokens}` });
+        }
+
+        // 2.5 Ensure lexicon.txt exists (even if empty) to prevent native crashes in some VITS models
+        const targetLexicon = `${piperDir}lexicon.txt`.replace('file://', '');
+        if (!(await FileSystem.getInfoAsync(`file://${targetLexicon}`)).exists) {
+          await FileSystem.writeAsStringAsync(`file://${targetLexicon}`, '');
+        }
+
+        const modelDir = piperDir.replace('file://', '').replace(/\/$/, '');
+        console.log(`[TTSService] Initializing native engine at isolated path: ${modelDir}`);
+
+        // 2.7 Ensure espeak-ng-data exists in the isolated folder
+        const sourceEspeak = `${paths.modelDirectory}espeak-ng-data`;
+        const targetEspeak = `${piperDir}espeak-ng-data`;
+        const espeakInfo = await FileSystem.getInfoAsync(sourceEspeak);
+        if (espeakInfo.exists && espeakInfo.isDirectory) {
+          const targetEspeakInfo = await FileSystem.getInfoAsync(targetEspeak);
+          if (!targetEspeakInfo.exists) {
+            console.log('[TTSService] Copying espeak-ng-data to isolated folder...');
+            // Unfortunately expo-file-system copyAsync doesn't support recursive directory copy easily on all versions
+            // but we can try. If it fails, we'll log it.
+            try {
+              await FileSystem.copyAsync({ from: sourceEspeak, to: targetEspeak });
+            } catch (e) {
+              console.warn('[TTSService] Failed to copy espeak-ng-data directory:', e);
+            }
+          }
+        } else {
+          console.log('[TTSService] espeak-ng-data NOT found in main models directory. Piper might produce silence.');
+        }
+
+        // 3. Verify model structure with detectTtsModel before initializing
+        console.log(`[TTSService] Detecting model structure at: ${modelDir}`);
+        const detection = await detectTtsModel({ type: 'file', path: modelDir });
+        
+        if (!detection.success) {
+          console.warn(`[TTSService] Model detection failed: ${detection.error || 'Unknown structure'}`);
+          // We will still try to initialize but with a warning
+        } else {
+          console.log(`[TTSService] Detected model type: ${detection.modelType}`);
+        }
+
+        // Use a consistent instance ID to ensure the native helper releases the previous engine
+        const instanceId = 'main_tts_instance';
+        
+        if (!SherpaOnnxNative) {
+          throw new Error('Native SherpaOnnx module not found. Please rebuild the app.');
+        }
+
+        // Hint GC to free memory before heavy allocation
+        console.log('[TTSService] Requesting GC before native init...');
+        
+        // Pass EXPLICIT non-null defaults for all parameters to prevent JNI crashes
+        // We use detection.modelType if available, otherwise fallback to 'vits'
+        const effectiveModelType = detection.modelType || 'vits';
+        const result = await SherpaOnnxNative.initializeTts(
+          instanceId,
+          modelDir,
+          effectiveModelType,
+          1,           // numThreads: 1 for low-memory stability
+          true,        // debug: enabled to see native logs
+          0.667,       // noiseScale
+          0.8,         // noiseScaleW
+          1.0,         // lengthScale
+          '',          // ruleFsts
+          '',          // ruleFars
+          1,           // maxNumSentences: must be integer
+          1.0,         // silenceScale
+          'cpu'        // provider
         );
 
-        if (result.success) {
-          this.isLoaded = true;
-          this.currentModelId = modelId;
-          this.useSystemTTS = false;
-          console.log('[TTSService] SherpaOnnx initialized successfully');
-        } else {
-          throw new Error(result.error || 'Native init failed');
+        if (!result || !result.success) {
+          throw new Error(result?.error || 'Native initialization failed');
         }
+
+        // 4. Create engine wrapper
+        this.engine = {
+          instanceId,
+          generateSpeech: async (text: string, options?: any) => {
+            return SherpaOnnxNative.generateTts(instanceId, text, options || {});
+          },
+          destroy: async () => {
+            return SherpaOnnxNative.unloadTts(instanceId);
+          }
+        };
+
+        this.isLoaded = true;
+        this.activeModelId = modelId;
+        this.useSystemTTS = false;
+        
+        // Get model info for debugging
+        try {
+          const sampleRate = await SherpaOnnxNative.getTtsSampleRate(instanceId);
+          const numSpeakers = await SherpaOnnxNative.getTtsNumSpeakers(instanceId);
+          console.log(`[TTSService] TTS Info: SampleRate=${sampleRate}, Speakers=${numSpeakers}`);
+        } catch (e) {
+          console.warn('[TTSService] Could not get TTS model info:', e);
+        }
+
+        console.log(`[TTSService] TTS engine initialized successfully for ${modelId}`);
+      } catch (error) {
+        console.error('[TTSService] TTS initialization failed, falling back to System TTS:', error);
+        this.isLoaded = true; // Mark as loaded so it doesn't try again immediately
+        this.useSystemTTS = true;
+        this.engine = null;
+      } finally {
+        this.isLoading = false;
+        this.initPromise = null;
       }
-    } catch (error) {
-      console.error('[TTSService] SherpaOnnx failed, falling back to System TTS:', error);
-      this.useSystemTTS = true;
-      this.isLoaded = true; // System TTS is always ready
-    } finally {
-      this.isLoading = false;
-    }
+    })();
+
+    return this.initPromise;
   }
 
   async speak(text: string, options: TTSOptions = {}): Promise<void> {
-    // Determine engine to use
     const forceSystem = options.useSystemTTS || this.useSystemTTS;
 
     if (!this.isLoaded && !forceSystem) {
@@ -117,42 +205,78 @@ class TTSService {
     }
 
     try {
+      // Ensure audio mode is set for playback
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
       if (forceSystem) {
         console.log('[TTSService] Using System TTS (expo-speech)');
         await Speech.speak(text, {
           rate: options.speed || 1.0,
-          onStart: () => console.log('[TTSService] System playback started'),
-          onError: (e) => console.error('[TTSService] System playback error:', e),
         });
       } else {
-        console.log(`[TTSService] Generating Amy speech: ${text.substring(0, 30)}...`);
+        if (!this.engine) throw new Error('TTS engine missing');
+
+        console.log(`[TTSService] Generating speech: ${text.substring(0, 30)}...`);
+        const startTime = Date.now();
         
-        const audio = await SherpaOnnx.generateTts(
-          this.instanceId!,
-          text,
-          {
-            sid: options.speakerId || 0,
-            speed: options.speed || 1.0,
-          }
-        );
+        const audio = await this.engine.generateSpeech(text, {
+          sid: options.speakerId !== undefined ? options.speakerId : 0,
+          speed: options.speed || 1.0,
+        });
+
+        const genTime = Date.now() - startTime;
+        console.log(`[TTSService] Audio generated in ${genTime}ms. Samples: ${audio?.samples?.length || 0}`);
+
+        // DETECT TRUNCATED AUDIO: If audio is too short (e.g. only padding/silence), fallback to system
+        // 2304 samples at 22kHz is ~100ms. A sentence should be much longer.
+        const durationSeconds = (audio?.samples?.length || 0) / (audio?.sampleRate || 22050);
+        const isSuspiciouslyShort = durationSeconds < 0.3 && text.length > 5;
+
+        if (!audio || !audio.samples || audio.samples.length === 0 || isSuspiciouslyShort) {
+          console.warn(`[TTSService] Generated audio is ${isSuspiciouslyShort ? 'too short' : 'empty'}. Falling back to System TTS.`);
+          this.useSystemTTS = true;
+          return this.speak(text, options);
+        }
 
         const paths = await getPlatformPaths();
-        const tempPath = `${paths.documentsDirectory}temp_tts.wav`;
-        await saveAudioToFile(audio, tempPath.replace('file://', ''));
+        const tempPath = `${paths.documentsDirectory}temp_tts.wav`.replace('file://', '');
+        
+        console.log(`[TTSService] Saving audio to: ${tempPath}`);
+        const saveStart = Date.now();
+        await saveAudioToFile(audio, tempPath);
+        console.log(`[TTSService] Audio saved in ${Date.now() - saveStart}ms`);
 
         if (this.sound) {
           try { await this.sound.unloadAsync(); } catch (e) {}
         }
-
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: tempPath },
-          { shouldPlay: true }
-        );
-        this.sound = sound;
+        
+        console.log(`[TTSService] Loading audio with expo-av: file://${tempPath}`);
+        try {
+          const { sound, status } = await Audio.Sound.createAsync(
+            { uri: `file://${tempPath}` },
+            { shouldPlay: true, volume: 1.0 }
+          );
+          this.sound = sound;
+          
+          if (status.isLoaded) {
+            console.log(`[TTSService] Playback started. Duration: ${status.durationMillis}ms`);
+          } else {
+            console.warn('[TTSService] Sound loaded but not playing immediately');
+          }
+        } catch (audioError) {
+          console.error('[TTSService] expo-av playback failed:', audioError);
+          // Fallback to system TTS if playback fails
+          this.useSystemTTS = true;
+          return this.speak(text, options);
+        }
       }
     } catch (error) {
       console.error('[TTSService] Speak failed:', error);
-      // Fallback to system on failure if not already using it
       if (!forceSystem) {
         this.useSystemTTS = true;
         return this.speak(text, options);
@@ -169,13 +293,16 @@ class TTSService {
   }
 
   async cleanup(): Promise<void> {
-    if (this.instanceId) {
-      try { await SherpaOnnx.unloadTts(this.instanceId); } catch (e) {}
+    if (this.engine) {
+      try { await this.engine.destroy(); } catch (e) {}
+      this.engine = null;
     }
     if (this.sound) {
       try { await this.sound.unloadAsync(); } catch (e) {}
+      this.sound = null;
     }
     this.isLoaded = false;
+    this.activeModelId = null;
     this.useSystemTTS = false;
     console.log('[TTSService] Cleaned up');
   }

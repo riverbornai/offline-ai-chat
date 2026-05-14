@@ -299,9 +299,9 @@ const ModelCard: React.FC<{
       for (const file of config.additionalFiles) {
         const extraInfo = await getModelFileInfo(file);
         if (!extraInfo || !extraInfo.exists) {
-          // Special case for Kokoro: if espeak-ng-data folder exists but archive is gone, that's fine
-          if (file.endsWith('.tar.bz2')) {
-            const folderPath = file.replace('.tar.bz2', '');
+          // Special case for Kokoro/Piper: if espeak-ng-data folder exists but archive is gone, that's fine
+          if (file.endsWith('.zip') || file.endsWith('.tar.bz2')) {
+            const folderPath = file.replace('.zip', '').replace('.tar.bz2', '');
             const folderInfo = await getModelFileInfo(folderPath);
             if (folderInfo && folderInfo.exists) continue;
           }

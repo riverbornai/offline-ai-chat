@@ -1,4 +1,5 @@
 import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
+import * as FileSystem from 'expo-file-system';
 import { modelStore } from '../stores/ModelStore';
 import {
     checkModelAvailableForDownload,
@@ -7,7 +8,8 @@ import {
     ensureModelDirectories,
     formatBytes,
     getModelFileInfo,
-    getModelFilePath
+    getModelFilePath,
+    bootstrapBundledAssets
 } from './platformPaths';
 
 // Configuration for available models
@@ -57,9 +59,9 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
   },
   'vits-piper-en_US-amy-low': {
     filename: 'en_US-amy-low.onnx',
-    additionalFiles: ['en_US-amy-low-tokens.txt'],
+    additionalFiles: ['en_US-amy-low-tokens.txt', 'espeak-ng-data.zip'],
     displayName: 'Amy Low (Piper TTS) (28MB)',
-    isLocal: false,
+    isLocal: true, // Mark as local if it's bundled
     expectedSize: 28 * 1024 * 1024
   },
 };
@@ -79,6 +81,10 @@ export const setupModels = async (progress?: SetupProgress) => {
     
     // Ensure model directories exist
     await ensureModelDirectories();
+
+    // Bootstrap bundled assets (copy from app package to storage)
+    progress?.onProgress?.('Checking for bundled assets...');
+    await bootstrapBundledAssets(progress?.onProgress);
     
     // Set up Phi-3 Mini model - check if it exists or needs to be downloaded
     for (const modelId of Object.keys(AVAILABLE_MODELS)) {
@@ -163,9 +169,9 @@ const isModelFullyDownloaded = async (modelId: string): Promise<boolean> => {
     for (const file of config.additionalFiles) {
       const extraInfo = await getModelFileInfo(file);
       if (!extraInfo || !extraInfo.exists) {
-        // Special case for Kokoro: if espeak-ng-data folder exists but archive is gone, that's fine
-        if (file.endsWith('.tar.bz2')) {
-          const folderPath = file.replace('.tar.bz2', '');
+        // Special case for Kokoro/Piper: if espeak-ng-data folder exists but archive is gone, that's fine
+        if (file.endsWith('.zip') || file.endsWith('.tar.bz2')) {
+          const folderPath = file.replace('.zip', '').replace('.tar.bz2', '');
           const folderInfo = await getModelFileInfo(folderPath);
           if (folderInfo && folderInfo.exists) continue;
         }
@@ -233,11 +239,30 @@ export const downloadAndSetupModel = async (modelId: keyof typeof AVAILABLE_MODE
         const factor = 1 / (1 + config.additionalFiles.length);
         const baseProgress = (i + 1) * factor;
         
-        await downloadModelToStorage(
+        const extraPath = await downloadModelToStorage(
           extraFile,
           (p) => progress?.onDownloadProgress?.(baseProgress + (p * factor)),
           (msg) => progress?.onProgress?.(`Downloading dependency: ${extraFile}...`)
         );
+
+        // Handle ZIP extraction
+        if (extraFile.endsWith('.zip')) {
+          try {
+            progress?.onProgress?.(`Extracting ${extraFile}...`);
+            const { unzip } = await import('react-native-zip-archive');
+            const targetDir = extraPath.replace('.zip', '');
+            
+            // Check if directory already exists
+            const dirInfo = await FileSystem.getInfoAsync(targetDir);
+            if (!dirInfo.exists) {
+              await unzip(extraPath.replace('file://', ''), targetDir.replace('file://', ''));
+              progress?.onProgress?.(`Successfully extracted ${extraFile}`);
+            }
+          } catch (unzipError) {
+            console.error(`Failed to unzip ${extraFile}:`, unzipError);
+            progress?.onError?.(`Failed to extract ${extraFile}. Please try again.`);
+          }
+        }
       }
     }
 

@@ -16,6 +16,7 @@ config.resolver.assetExts = [
   'gguf',  // Model files
   'bin',   // Binary files
   'model', // Model files
+  'zip',   // Zip files for bundled data
 ];
 
 // Source extensions for React Native
