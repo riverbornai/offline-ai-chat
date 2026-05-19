@@ -333,7 +333,10 @@ const ModelCard: React.FC<{
   React.useEffect(() => {
     if (model.type !== 'tts') return;
     const sync = () => {
-      setTtsLoaded(ttsService.getIsLoaded());
+      const isLoaded = ttsService.getIsLoaded();
+      const activeId = ttsService.getActiveModelId();
+      // Only mark as loaded if THIS specific model is the active one
+      setTtsLoaded(isLoaded && activeId === model.id);
       setTtsLoading(ttsService.getIsLoading());
     };
     sync();

@@ -20,8 +20,7 @@ export class ConversationPromptBuilder {
   }
 
   private getBaseContext(): string {
-    const { nativeLanguage } = this.context;
-    return `You are Nuri, an AI assistant specializing in English conversation analysis. Provide concise, accurate answers to user questions. The user's native language is ${nativeLanguage}.`;
+    return `You are a helpful and engaging AI voice assistant. Provide concise, natural, and helpful answers to user questions. Maintain a friendly and conversational tone.`;
   }
 
   private buildConversationPrompt(
@@ -38,11 +37,10 @@ export class ConversationPromptBuilder {
     return `${baseContext}
 
 ### Instructions:
-- Practice English with user
-- Correct ALL mistakes (grammar, vocab, pronunciation)
-- Point out wrong answers clearly
-- Explain corrections briefly
-- Ask follow-up questions
+- Be a natural and engaging conversation partner
+- Keep responses concise and optimized for voice interaction
+- Provide helpful information and answer questions accurately
+- Maintain a consistent and friendly persona
 
 ${historyContext}
 

@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Platform } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
-import { Platform } from 'react-native';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -36,27 +36,18 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Practice',
+          title: 'Chat',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="talk"
+        options={{
+          title: 'Talk',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'mic' : 'mic-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="models"
-        options={{
-          title: 'Models',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="storage"
-        options={{
-          title: 'Storage',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'layers' : 'layers-outline'} size={24} color={color} />
           ),
         }}
       />

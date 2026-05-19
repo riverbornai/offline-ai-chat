@@ -31,6 +31,9 @@ const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
   'en_US-amy-low.onnx': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/en_US-amy-low.onnx?download=true',
   'en_US-amy-low-tokens.txt': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/tokens.txt?download=true',
   'espeak-ng-data.zip': 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2',
+  'kokoro-multi-lang-v1_1.onnx': 'https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/model.onnx?download=true',
+  'kokoro-multi-lang-v1_1-voices.bin': 'https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/voices.bin?download=true',
+  'kokoro-multi-lang-v1_1-tokens.txt': 'https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/tokens.txt?download=true',
 };
 
 /**

@@ -30,7 +30,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             {session?.title || 'New Conversation'}
           </Text>
-          <View style={styles.badgeRow}>
+          {/* <View style={styles.badgeRow}>
             <View style={[styles.badge, { backgroundColor: `${colors.secondary}15` }]}>
               <Text style={[styles.badgeText, { color: colors.secondary }]}>
                 {session?.targetLanguage || 'Learning'}
@@ -42,7 +42,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
                 {session?.nativeLanguage || 'Native'}
               </Text>
             </View>
-          </View>
+          </View> */}
         </View>
 
         <View style={[styles.statusIndicator, { backgroundColor: colors.success + '20' }]}>
