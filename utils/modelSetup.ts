@@ -64,6 +64,13 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
     isLocal: true, // Mark as local if it's bundled
     expectedSize: 28 * 1024 * 1024
   },
+  'kokoro-multi-lang-v1_1': {
+    filename: 'kokoro-multi-lang-v1_1.onnx',
+    additionalFiles: ['kokoro-multi-lang-v1_1-voices.bin', 'kokoro-multi-lang-v1_1-tokens.txt'],
+    displayName: 'Kokoro v1.1 Multi-lang (344MB)',
+    isLocal: false,
+    expectedSize: 344 * 1024 * 1024
+  },
 };
 
 // Interface for setup progress callbacks

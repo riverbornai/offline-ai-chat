@@ -30,7 +30,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             {session?.title || 'New Conversation'}
           </Text>
-          <View style={styles.badgeRow}>
+          {/* <View style={styles.badgeRow}>
             <View style={[styles.badge, { backgroundColor: `${colors.secondary}15` }]}>
               <Text style={[styles.badgeText, { color: colors.secondary }]}>
                 {session?.targetLanguage || 'Learning'}
@@ -42,7 +42,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
                 {session?.nativeLanguage || 'Native'}
               </Text>
             </View>
-          </View>
+          </View> */}
         </View>
 
         <View style={[styles.statusIndicator, { backgroundColor: colors.success + '20' }]}>
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 4,
     letterSpacing: -0.3,
   },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     textTransform: 'uppercase',
   },
   statusIndicator: {
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
 });
 

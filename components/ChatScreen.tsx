@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -10,14 +11,11 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from './StoreProvider';
 
-import { ttsService } from '../services/ttsService';
-import { whisperService } from '../services/whisperService';
 import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
@@ -45,15 +43,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { chatSessionStore, modelStore } = useStores();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-  const [ttsBuffer, setTtsBuffer] = useState('');
-  const ttsRef = useRef('');
-  const ttsQueue = useRef<string[]>([]);
-  const ttsSpeakingRef = useRef(false);
-  const [isWhisperLoading, setIsWhisperLoading] = useState(!whisperService.isModelLoaded());
-  const [whisperError, setWhisperError] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionId) {
@@ -63,49 +55,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     }
   }, [sessionId, topic]);
 
-  useEffect(() => {
-    let mounted = true;
-    if (!whisperService.isModelLoaded()) {
-      setIsWhisperLoading(true);
-      whisperService.initialize()
-        .then(() => {
-          if (mounted) setIsWhisperLoading(false);
-        })
-        .catch((err) => {
-          if (mounted) {
-            setWhisperError(err?.message || 'Failed to initialize Whisper');
-            setIsWhisperLoading(false);
-          }
-        });
-    }
-    return () => { mounted = false; };
-  }, []);
-
-  const speakNextSentence = async () => {
-    if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
-      const nextSentence = ttsQueue.current.shift();
-      if (nextSentence) {
-        ttsSpeakingRef.current = true;
-        try {
-          await ttsService.speak(nextSentence);
-        } catch (err) {
-          console.error('TTS speak error:', err);
-        } finally {
-          ttsSpeakingRef.current = false;
-          speakNextSentence(); // Process next in queue
-        }
-      }
-    }
-  };
-
-  useEffect(() => {
-    // Sherpa-ONNX speak is async and waits for completion in my wrapper,
-    // so we don't need the event listener for tts-finish anymore.
-    // The speakNextSentence function now handles the queue sequentially.
-    return () => {
-      ttsService.stop();
-    };
-  }, []);
 
   useEffect(() => {
     if (scrollViewRef.current) {
@@ -118,7 +67,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     if (!cleaned || isLoading) return;
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
-      const errorMessage = hasDownloadedModel 
+      const errorMessage = hasDownloadedModel
         ? '❌ Model is downloaded but not loaded. Go to the Models tab and tap "Load Model" to start chatting.'
         : '❌ No model available. Please download and load a language model first. Go to the Models tab to set up a model.';
       chatSessionStore.addMessage({
@@ -144,10 +93,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     let tokensReceived = 0;
     try {
       const conversationContext = {
-        targetLanguage: chatSessionStore.settings.targetLanguage,
-        nativeLanguage: chatSessionStore.settings.nativeLanguage,
-        learningLevel: chatSessionStore.settings.learningLevel,
-        correctionPreference: chatSessionStore.settings.correctionPreference,
         topic: topic || '',
       };
       const promptBuilder = new ConversationPromptBuilder(conversationContext);
@@ -157,9 +102,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         author: 'assistant',
         type: 'conversation',
       });
-      ttsService.stop();
-      setTtsBuffer('');
-      ttsRef.current = '';
+
       const completionPromise = modelStore.generateCompletion(
         prompt,
         {
@@ -173,22 +116,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
             accumulatedResponse += token;
             const cleanedResponse = cleanLLMResponse(accumulatedResponse);
             chatSessionStore.updateMessage(assistantMessage.id, cleanedResponse);
-
-            ttsRef.current += token;
-            const sentenceRegex = /([^.?!]+[.?!]+["')\]]*\s*)/g;
-            let match;
-            let lastIndex = 0;
-            while ((match = sentenceRegex.exec(ttsRef.current)) !== null) {
-              const sentence = match[0].trim();
-              if (sentence && !/^[\s.,!?;:]+$/.test(sentence)) {
-                ttsQueue.current.push(sentence);
-                lastIndex = sentenceRegex.lastIndex;
-              }
-            }
-            if (lastIndex > 0) {
-              ttsRef.current = ttsRef.current.slice(lastIndex);
-            }
-            speakNextSentence();
           }
         }
       );
@@ -226,21 +153,21 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const renderWelcomeMessage = () => {
     const hasModel = modelStore.context !== undefined;
     const hasDownloadedModel = modelStore.availableModels.length > 0;
-    
+
     return (
-      <View style={[styles.welcomeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+      <View style={[styles.welcomeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={[styles.welcomeIconContainer, { backgroundColor: `${colors.primary}15` }]}>
           <Ionicons name="sparkles" size={32} color={colors.primary} />
         </View>
         <Text style={[styles.welcomeTitle, { color: colors.text }]}>
-          {!hasModel && !hasDownloadedModel ? 'Welcome to AI Chat!' : hasDownloadedModel && !hasModel ? 'Model Ready!' : 'Start Learning!'}
+          {!hasModel && !hasDownloadedModel ? 'Welcome to AI Chat!' : hasDownloadedModel && !hasModel ? 'Model Ready!' : 'Start Chatting!'}
         </Text>
         <Text style={[styles.welcomeText, { color: colors.text }]}>
-          {!hasModel && !hasDownloadedModel 
-            ? 'Download a model to begin your language learning journey.' 
-            : hasDownloadedModel && !hasModel 
-              ? 'Your model is ready to go. Just load it in the Models tab.' 
-              : 'I\'m ready to help you practice! What would you like to talk about today?'}
+          {!hasModel && !hasDownloadedModel
+            ? 'Download a model to begin your AI companion experience.'
+            : hasDownloadedModel && !hasModel
+              ? 'Your model is ready to go. Just load it in the Models tab.'
+              : 'I\'m ready to help! What would you like to talk about today?'}
         </Text>
         {!hasModel && (
           <View style={styles.actionPrompt}>
@@ -259,20 +186,10 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     </View>
   );
 
-  if (whisperError) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color={colors.error} />
-          <Text style={[styles.errorText, { color: colors.error }]}>Whisper Error: {whisperError}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
-      <KeyboardAvoidingView 
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
@@ -304,12 +221,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           colors={colors}
           placeholder={modelStore.context ? "Say something..." : "Load a model first"}
         />
-        {isWhisperLoading && (
-          <View style={styles.whisperOverlay}>
-            <ActivityIndicator color={colors.primary} size="large" />
-            <Text style={[styles.loadingText, { color: colors.text, marginTop: 12 }]}>Preparing Voice AI...</Text>
-          </View>
-        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -348,7 +259,7 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 12,
     textAlign: 'center',
     letterSpacing: -0.5,
@@ -356,6 +267,7 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'Sora-Medium',
     textAlign: 'center',
     opacity: 0.7,
     marginBottom: 20,
@@ -367,7 +279,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   loadingBubble: {
     flexDirection: 'row',
@@ -383,7 +295,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
   },
   errorContainer: {
     flex: 1,
@@ -393,16 +305,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     textAlign: 'center',
     marginTop: 16,
-  },
-  whisperOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
   },
 });
 

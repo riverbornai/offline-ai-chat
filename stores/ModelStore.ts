@@ -110,6 +110,17 @@ class ModelStore {
       size: '28MB',
       description: 'Natural sounding Piper TTS model (Amy Low)',
       languageSupport: ['English']
+    },
+    {
+      id: 'kokoro-multi-lang-v1_1',
+      name: 'Kokoro v1.1 (Multi-lang)',
+      path: 'kokoro-multi-lang-v1_1.onnx',
+      type: 'tts',
+      isDownloaded: false,
+      isLoading: false,
+      size: '344MB',
+      description: 'High-quality multi-lingual TTS model. Supports English, Chinese, French, German, Italian, Japanese, Korean, Portuguese, and Spanish.',
+      languageSupport: ['English', 'Chinese', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Portuguese', 'Spanish']
     }
   ];
 
@@ -262,6 +273,17 @@ class ModelStore {
         size: '28MB',
         description: 'Natural sounding Piper TTS model (Amy Low)',
         languageSupport: ['English']
+      },
+      {
+        id: 'kokoro-multi-lang-v1_1',
+        name: 'Kokoro v1.1 (Multi-lang)',
+        path: 'kokoro-multi-lang-v1_1.onnx',
+        type: 'tts',
+        isDownloaded: false,
+        isLoading: false,
+        size: '344MB',
+        description: 'High-quality multi-lingual TTS model. Supports English, Chinese, French, German, Italian, Japanese, Korean, Portuguese, and Spanish.',
+        languageSupport: ['English', 'Chinese', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Portuguese', 'Spanish']
       }
     ];
 

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "speechtotext",
-    "slug": "speechtotext",
+    "name": "Ai chat",
+    "slug": "ai-chat",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "speechtotext",
+    "scheme": "aichat",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
     "ios": {
@@ -16,11 +16,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.speechtotext",
+      "package": "com.anonymous.aichat",
       "minSdkVersion": 24,
       "permissions": [
         "android.permission.RECORD_AUDIO",

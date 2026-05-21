@@ -1,6 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ChatMessage } from '../stores/ChatSessionStore';
+import { ttsService } from '../services/ttsService';
+import { useState } from 'react';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -17,6 +20,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onPress,
   onLongPress,
 }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
@@ -92,8 +96,27 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               },
             ]}
           >
-            {formatTime(message.timestamp)}
           </Text>
+          
+          {!isUser && message.text.length > 0 && message.type !== 'transcription' && (
+            <TouchableOpacity 
+              onPress={async () => {
+                setIsSpeaking(true);
+                try {
+                  await ttsService.speak(message.text);
+                } finally {
+                  setIsSpeaking(false);
+                }
+              }}
+              style={styles.speakerButton}
+            >
+              {isSpeaking ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Ionicons name="volume-medium" size={18} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     </View>
@@ -145,7 +168,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: '500',
+    fontFamily: 'Sora-Medium',
   },
   footer: {
     flexDirection: 'row',
@@ -154,8 +177,14 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     textTransform: 'uppercase',
+  },
+  speakerButton: {
+    marginLeft: 12,
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
 });
 

@@ -7,50 +7,56 @@
  * Professional color scheme for the Speech-to-Text app
  */
 
-const primaryBlue = '#3b82f6';
-const primaryGreen = '#10b981';
-const primaryRed = '#ef4444';
-const neutralGray = '#64748b';
-const lightGray = '#f1f5f9';
-const darkGray = '#1e293b';
+// Riverborn Brand Color Scheme
+const forest = '#0d2b22';      // Deep forest green (Primary brand color)
+const lime = '#d4f53c';        // Vibrant yellow-green (Accent brand color)
+const limeDark = '#8faa20';    // Darker lime green for readability on light backgrounds
+const frost = '#f2ffee';       // Very pale minty background
+const midnight = '#060f0c';    // Extremely dark green/black for dark mode background
+const forestDeep = '#0d2626';  // Alternative deep forest green
+const riverMist = '#9fcebe';   // Muted teal/green
+const forest300 = '#6aa98c';   // Medium forest green
+const stone = '#e8ede6';       // Cool grey-green for borders/light surfaces
+const warning = '#fbbf24';
+const error = '#ef4444';
 
 export const Colors = {
   light: {
-    text: '#1a1a1a',
-    background: '#f8fafc',
+    text: forest,
+    background: frost,
     surface: '#ffffff',
-    primary: primaryBlue,
-    secondary: primaryGreen,
-    accent: primaryRed,
-    muted: neutralGray,
-    border: '#e2e8f0',
-    tint: primaryBlue,
-    icon: '#64748b',
-    tabIconDefault: '#94a3b8',
-    tabIconSelected: primaryBlue,
-    shadow: 'rgba(0, 0, 0, 0.1)',
-    success: primaryGreen,
+    primary: forest,
+    secondary: limeDark,
+    accent: lime,
+    muted: '#546565',
+    border: 'rgba(13, 43, 34, 0.12)',
+    tint: forest,
+    icon: forest,
+    tabIconDefault: riverMist,
+    tabIconSelected: forest,
+    shadow: 'rgba(13, 43, 34, 0.08)',
+    success: forest,
     warning: '#f59e0b',
-    error: primaryRed,
-    disabled: '#94a3b8',
+    error: error,
+    disabled: riverMist,
   },
   dark: {
-    text: '#f8fafc',
-    background: '#0f172a',
-    surface: '#1e293b',
-    primary: '#60a5fa',
-    secondary: '#34d399',
-    accent: '#f87171',
-    muted: '#94a3b8',
-    border: '#334155',
-    tint: '#60a5fa',
-    icon: '#94a3b8',
-    tabIconDefault: '#64748b',
-    tabIconSelected: '#60a5fa',
-    shadow: 'rgba(0, 0, 0, 0.3)',
-    success: '#34d399',
-    warning: '#fbbf24',
-    error: '#f87171',
-    disabled: '#64748b',
+    text: frost,
+    background: midnight,
+    surface: forestDeep,
+    primary: lime,
+    secondary: riverMist,
+    accent: lime,
+    muted: riverMist,
+    border: 'rgba(255, 255, 255, 0.15)',
+    tint: lime,
+    icon: riverMist,
+    tabIconDefault: forest300,
+    tabIconSelected: lime,
+    shadow: 'rgba(0, 0, 0, 0.4)',
+    success: lime,
+    warning: '#ecf9a0',
+    error: error,
+    disabled: forest300,
   },
 };
