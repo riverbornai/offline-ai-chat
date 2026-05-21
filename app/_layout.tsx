@@ -10,10 +10,37 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { StoreProvider } from '../components/StoreProvider';
 import { quickSetup } from '../utils/modelSetup';
 
+import { Colors } from '../constants/Colors';
+
+const CustomLightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: Colors.light.primary,
+    background: Colors.light.background,
+    card: Colors.light.surface,
+    text: Colors.light.text,
+    border: Colors.light.border,
+  },
+};
+
+const CustomDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: Colors.dark.primary,
+    background: Colors.dark.background,
+    card: Colors.dark.surface,
+    text: Colors.dark.text,
+    border: Colors.dark.border,
+  },
+};
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Clarendon: require('../assets/fonts/Clarendon.ttf'),
   });
 
   // Initialize models on app start
@@ -41,7 +68,7 @@ export default function RootLayout() {
 
   return (
     <StoreProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomLightTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="+not-found" />

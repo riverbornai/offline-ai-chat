@@ -172,7 +172,7 @@ class WhisperService {
         temperatureInc: 0.2,
         entropyThreshold: 2.4,
         logprobThreshold: -1.0,
-        noSpeechThreshold: 0.6,
+        noSpeechThreshold: 0.85,
       });
 
       // Wait for the transcription to complete
@@ -220,7 +220,7 @@ class WhisperService {
         temperatureInc: 0.2,
         entropyThreshold: 2.4,
         logprobThreshold: -1.0,
-        noSpeechThreshold: 0.6,
+        noSpeechThreshold: 0.85,
       });
 
       // Store the stop function for later use

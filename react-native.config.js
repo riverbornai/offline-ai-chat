@@ -5,7 +5,7 @@ module.exports = {
   },
   project: {
     android: {
-      packageName: 'com.anonymous.speechtotext'
+      packageName: 'com.anonymous.aichat'
     }
   }
 }; 

@@ -15,7 +15,7 @@ export function ThemedText({
   type = 'default',
   ...rest
 }: ThemedTextProps) {
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const color = useThemeColor({ light: lightColor, dark: darkColor }, type === 'link' ? 'tint' : 'text');
 
   return (
     <Text
@@ -45,16 +45,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontFamily: 'Clarendon',
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: 'Clarendon',
   },
   link: {
     lineHeight: 30,
     fontSize: 16,
-    color: '#0a7ea4',
   },
 });

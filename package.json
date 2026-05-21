@@ -1,5 +1,5 @@
 {
-  "name": "speechtotext",
+  "name": "ai-chat",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {

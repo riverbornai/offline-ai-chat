@@ -16,7 +16,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from '../components/StoreProvider';
 import { ttsService } from '../services/ttsService';
 import { whisperService } from '../services/whisperService';
-import { ConversationPromptBuilder } from '../utils/chat';
+import { ConversationPromptBuilder, ConversationContext } from '../utils/chat';
 
 const { width } = Dimensions.get('window');
 
@@ -50,6 +50,55 @@ const TalkScreen: React.FC = observer(() => {
   const ttsQueue = useRef<string[]>([]);
   const ttsSpeakingRef = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Refs for robust voice control & race condition prevention
+  const shouldAutoResumeRef = useRef(false);
+  const transcriptRef = useRef('');
+  const isProcessingRef = useRef(false);
+  const generationActiveRef = useRef(false);
+
+  // Common Whisper hallucinations during silence or background noise
+  const isNoiseOrHallucination = (text: string): boolean => {
+    const cleanedText = text
+      .trim()
+      .replace(/\[BLANK_AUDIO\]/gi, '')
+      .replace(/\(BLANK_AUDIO\)/gi, '')
+      .trim();
+
+    if (!cleanedText) return true;
+
+    const normalized = cleanedText
+      .toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, '') // remove punctuation
+      .trim();
+
+    if (!normalized) return true;
+
+    // Standard high-probability Whisper static/silence hallucinations
+    const noisePhrases = new Set([
+      'you', 'thank you', 'thanks', 'um', 'uh', 'ah', 'oh', 'er', 'hm', 'hmm', 
+      'mhm', 'huh', 'so', 'and', 'yeah', 'yes', 'no', 'ok', 'okay', 'bye', 
+      'bye bye', 'bye-bye', 'go', 'to', 'the', 'it', 'of', 'in', 'that', 'for',
+      'he', 'she', 'they', 'we', 'i', 'me', 'my', 'your', 'ours', 'us',
+      'subtitles by', 'thanks for watching', 'please subscribe', 'viewers like you',
+      'english subtitles', 'english sub'
+    ]);
+
+    if (noisePhrases.has(normalized)) {
+      return true;
+    }
+
+    // Repeated word hallucinations like "you you you" or "thank you thank you"
+    const words = normalized.split(/\s+/);
+    if (words.length > 1 && new Set(words).size === 1) {
+      const uniqueWord = words[0];
+      if (noisePhrases.has(uniqueWord) || uniqueWord.length <= 4) {
+        return true;
+      }
+    }
+
+    return false;
+  };
 
   // Initialize Whisper lazily
   useEffect(() => {
@@ -96,7 +145,7 @@ const TalkScreen: React.FC = observer(() => {
     }
   }, [state]);
 
-  const speakNextSentence = useCallback(async () => {
+  const speakNextSentence = async () => {
     if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
       const nextSentence = ttsQueue.current.shift();
       if (nextSentence) {
@@ -112,25 +161,38 @@ const TalkScreen: React.FC = observer(() => {
             speakNextSentence();
           } else {
             setState('idle');
-            // Auto-resume listening after a short delay to avoid catching own echo
+            // Auto-resume listening after a short delay if enabled and not manually stopped
             setTimeout(() => {
-                if (state !== 'listening') startListening();
+              if (shouldAutoResumeRef.current) {
+                startListening();
+              }
             }, 500);
           }
         }
       }
     } else if (ttsQueue.current.length === 0 && !ttsSpeakingRef.current) {
-        setState('idle');
+      setState('idle');
+      // Auto-resume listening after a short delay if enabled and not manually stopped
+      setTimeout(() => {
+        if (shouldAutoResumeRef.current) {
+          startListening();
+        }
+      }, 500);
     }
-  }, [state]);
+  };
 
   const handleSTTResult = async (text: string) => {
+    if (isProcessingRef.current) return;
+
     const cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
-    if (!cleaned) {
+    if (!cleaned || isNoiseOrHallucination(cleaned)) {
         setState('idle');
+        isProcessingRef.current = false;
         return;
     }
     
+    isProcessingRef.current = true;
+    generationActiveRef.current = true;
     setTranscript(cleaned);
     setState('processing');
     
@@ -142,8 +204,11 @@ const TalkScreen: React.FC = observer(() => {
     });
 
     try {
-      const conversationContext = {
-        topic: chatSessionStore.activeSession?.topic || 'general conversation',
+      const conversationContext: ConversationContext = {
+        targetLanguage: chatSessionStore.activeSession?.targetLanguage || chatSessionStore.settings.targetLanguage || 'English',
+        nativeLanguage: chatSessionStore.activeSession?.nativeLanguage || chatSessionStore.settings.nativeLanguage || 'English',
+        learningLevel: chatSessionStore.settings.learningLevel || 'beginner',
+        topic: chatSessionStore.activeSession?.title || 'general conversation',
       };
       
       const promptBuilder = new ConversationPromptBuilder(conversationContext);
@@ -154,6 +219,10 @@ const TalkScreen: React.FC = observer(() => {
         author: 'assistant',
         type: 'conversation',
       });
+
+      if (!assistantMessage) {
+        throw new Error('Failed to create assistant message in store');
+      }
 
       setAssistantText('');
       ttsRef.current = '';
@@ -169,6 +238,9 @@ const TalkScreen: React.FC = observer(() => {
           stop: ['\nUser:', '\nAssistant:'],
         },
         (token: string) => {
+          // Discard tokens if the generation has been cancelled
+          if (!generationActiveRef.current) return;
+
           accumulatedResponse += token;
           const cleanedResponse = cleanLLMResponse(accumulatedResponse);
           setAssistantText(cleanedResponse);
@@ -194,13 +266,21 @@ const TalkScreen: React.FC = observer(() => {
     } catch (error) {
       console.error('Generation error:', error);
       setState('idle');
+    } finally {
+      isProcessingRef.current = false;
     }
   };
 
   const startListening = async () => {
+    // Only allow starting if not already active or processing
     if (state !== 'idle') return;
     
     try {
+      shouldAutoResumeRef.current = true;
+      isProcessingRef.current = false;
+      generationActiveRef.current = false;
+      transcriptRef.current = '';
+      
       await ttsService.stop();
       setState('listening');
       setTranscript('');
@@ -209,6 +289,7 @@ const TalkScreen: React.FC = observer(() => {
       await whisperService.startRealtimeTranscription({
         onTranscriptionUpdate: (result) => {
           setTranscript(result.text);
+          transcriptRef.current = result.text;
         },
         onComplete: (result) => {
           if (result.text.trim()) {
@@ -230,18 +311,44 @@ const TalkScreen: React.FC = observer(() => {
 
   const stopListening = async () => {
     if (state !== 'listening') return;
+    shouldAutoResumeRef.current = false;
     try {
       await whisperService.stopRealtimeTranscription();
-      // State will be updated in onComplete or handleSTTResult
+      
+      // Immediately process the current transcription instead of waiting for delayed complete callback
+      const finalTranscript = transcriptRef.current;
+      const cleaned = finalTranscript.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
+      
+      if (cleaned && !isNoiseOrHallucination(cleaned)) {
+        handleSTTResult(cleaned);
+      } else {
+        setState('idle');
+      }
     } catch (err) {
       console.error('Failed to stop listening:', err);
       setState('idle');
     }
   };
 
+  const stopSpeakingAndProcessing = async () => {
+    shouldAutoResumeRef.current = false;
+    isProcessingRef.current = false;
+    generationActiveRef.current = false;
+    ttsQueue.current = [];
+    ttsSpeakingRef.current = false;
+    try {
+      await ttsService.stop();
+    } catch (err) {
+      console.error('Failed to stop TTS:', err);
+    }
+    setState('idle');
+  };
+
   const toggleMic = () => {
     if (state === 'listening') {
       stopListening();
+    } else if (state === 'speaking' || state === 'processing') {
+      stopSpeakingAndProcessing();
     } else if (state === 'idle') {
       startListening();
     }
@@ -315,19 +422,19 @@ const TalkScreen: React.FC = observer(() => {
           
           <TouchableOpacity 
             onPress={toggleMic}
-            disabled={state === 'processing' || state === 'speaking'}
+            disabled={state === 'processing'}
             activeOpacity={0.7}
           >
             <Animated.View style={[
               styles.micButton, 
               { 
-                backgroundColor: state === 'listening' ? colors.error : colors.primary,
+                backgroundColor: state === 'listening' ? colors.error : (state === 'speaking' ? colors.warning : colors.primary),
                 transform: [{ scale: pulseAnim }],
-                opacity: (state === 'processing' || state === 'speaking') ? 0.5 : 1
+                opacity: state === 'processing' ? 0.5 : 1
               }
             ]}>
               <Ionicons 
-                name={state === 'listening' ? 'stop' : 'mic'} 
+                name={state === 'listening' || state === 'speaking' ? 'stop' : 'mic'} 
                 size={40} 
                 color="white" 
               />

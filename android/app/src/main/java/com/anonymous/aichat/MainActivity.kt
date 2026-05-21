@@ -1,4 +1,4 @@
-package com.anonymous.speechtotext
+package com.anonymous.aichat
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

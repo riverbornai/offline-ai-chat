@@ -1,4 +1,4 @@
-package com.anonymous.speechtotext
+package com.anonymous.aichat
 
 import android.app.Application
 import android.content.res.Configuration
