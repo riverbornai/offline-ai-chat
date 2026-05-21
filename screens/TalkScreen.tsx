@@ -462,12 +462,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     letterSpacing: -1,
   },
   headerSubtitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Sora-Medium',
     marginTop: 4,
   },
   content: {
@@ -485,13 +485,13 @@ const styles = StyleSheet.create({
   },
   transcriptLabel: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     letterSpacing: 1,
     marginBottom: 8,
   },
   transcriptText: {
     fontSize: 20,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     lineHeight: 28,
   },
   assistantBox: {
@@ -499,13 +499,13 @@ const styles = StyleSheet.create({
   },
   assistantLabel: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     letterSpacing: 1,
     marginBottom: 8,
   },
   assistantText: {
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: 'Sora-Medium',
     lineHeight: 32,
   },
   welcomeBox: {
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
       fontSize: 18,
-      fontWeight: '600',
+      fontFamily: 'Sora-Medium',
       marginTop: 16,
       textAlign: 'center',
   },
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   },
   stateText: {
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: 'Sora-Bold',
     letterSpacing: 2,
   },
   micButton: {
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
     textAlign: 'center',
   },
   retryButton: {
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
   },
   retryText: {
     color: 'white',
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     fontSize: 16,
   },
 });

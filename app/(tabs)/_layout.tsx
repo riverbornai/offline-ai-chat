@@ -16,7 +16,8 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: {
-          fontWeight: '700',
+          fontFamily: 'Sora-Bold',
+          fontWeight: 'normal',
           fontSize: 11,
           marginBottom: Platform.OS === 'ios' ? 0 : 4,
         },
@@ -48,6 +49,33 @@ export default function TabLayout() {
           title: 'Talk',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'mic' : 'mic-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="models"
+        options={{
+          title: 'Models',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="storage"
+        options={{
+          title: 'Storage',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'layers' : 'layers-outline'} size={24} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={24} color={color} />
           ),
         }}
       />

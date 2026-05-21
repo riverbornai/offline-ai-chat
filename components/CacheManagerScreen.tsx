@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 20,
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   header: {
     paddingHorizontal: 24,
@@ -322,17 +322,18 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   title: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'Sora-Medium',
   },
   section: {
     paddingHorizontal: 20,
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 16,
     paddingLeft: 4,
   },
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
   },
   totalSizeLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     opacity: 0.5,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -371,7 +372,7 @@ const styles = StyleSheet.create({
   },
   totalSizeValue: {
     fontSize: 40,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     letterSpacing: -1,
   },
   breakdown: {
@@ -394,12 +395,12 @@ const styles = StyleSheet.create({
   },
   cacheItemLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     marginBottom: 2,
   },
   cacheItemSub: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     opacity: 0.5,
   },
   actionCard: {
@@ -422,14 +423,14 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     fontSize: 17,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 4,
   },
   actionSubtitle: {
     fontSize: 13,
     lineHeight: 18,
     opacity: 0.7,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
   },
   manualCard: {
     flexDirection: 'row',
@@ -452,13 +453,13 @@ const styles = StyleSheet.create({
   },
   manualTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     marginBottom: 2,
   },
   manualSubtitle: {
     fontSize: 12,
     opacity: 0.5,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
   },
   dangerCard: {
     flexDirection: 'row',
@@ -473,7 +474,7 @@ const styles = StyleSheet.create({
   },
   dangerText: {
     fontSize: 15,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
   },
   clearingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -485,7 +486,7 @@ const styles = StyleSheet.create({
   clearingText: {
     marginTop: 20,
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   bottomSpacer: {
     height: 60,

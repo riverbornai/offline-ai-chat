@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     letterSpacing: -1,
   },
   content: {
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     letterSpacing: 1.5,
     marginBottom: 16,
     opacity: 0.8,
@@ -96,11 +96,11 @@ const styles = StyleSheet.create({
   },
   itemLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   itemValue: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Sora-Medium',
   },
   footer: {
       padding: 40,
@@ -108,6 +108,6 @@ const styles = StyleSheet.create({
   },
   footerText: {
       fontSize: 12,
-      fontWeight: '600',
+      fontFamily: 'Sora-Medium',
   }
 });

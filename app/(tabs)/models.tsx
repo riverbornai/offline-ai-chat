@@ -694,13 +694,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'Sora-Medium',
     opacity: 0.7,
     marginBottom: 20,
   },
@@ -721,7 +722,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   scrollView: {
     flex: 1,
@@ -744,7 +745,7 @@ const styles = StyleSheet.create({
   },
   setupMessageText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     flex: 1,
     marginLeft: 12,
   },
@@ -767,7 +768,7 @@ const styles = StyleSheet.create({
   },
   modelName: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     flex: 1,
     marginRight: 12,
     letterSpacing: -0.3,
@@ -782,13 +783,14 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   modelDescription: {
     fontSize: 15,
     lineHeight: 22,
+    fontFamily: 'Sora-Medium',
     marginBottom: 16,
     opacity: 0.8,
   },
@@ -805,7 +807,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     opacity: 0.6,
   },
   languagesContainer: {
@@ -813,7 +815,7 @@ const styles = StyleSheet.create({
   },
   languagesLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     marginBottom: 10,
     opacity: 0.5,
   },
@@ -832,11 +834,11 @@ const styles = StyleSheet.create({
   },
   languageText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   moreLanguages: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     opacity: 0.5,
     fontStyle: 'italic',
   },
@@ -854,7 +856,7 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     opacity: 0.6,
   },
   progressBar: {
@@ -868,7 +870,7 @@ const styles = StyleSheet.create({
   },
   progressPercentage: {
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -912,7 +914,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 15,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
   },
   infoCard: {
     borderRadius: 24,
@@ -929,7 +931,7 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
   },
   infoItem: {
     flexDirection: 'row',
@@ -945,11 +947,12 @@ const styles = StyleSheet.create({
   },
   infoStepText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
   },
   infoText: {
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: 'Sora-Medium',
     flex: 1,
     opacity: 0.8,
   },

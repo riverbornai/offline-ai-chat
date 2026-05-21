@@ -37,23 +37,26 @@ const styles = StyleSheet.create({
   default: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'Sora-Medium',
   },
   defaultSemiBold: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   title: {
     fontSize: 32,
-    fontFamily: 'Clarendon',
+    fontFamily: 'Sora-Bold',
     lineHeight: 32,
   },
   subtitle: {
     fontSize: 20,
-    fontFamily: 'Clarendon',
+    fontFamily: 'Sora-Bold',
   },
   link: {
     lineHeight: 30,
     fontSize: 16,
+    fontFamily: 'Sora-Medium',
   },
 });

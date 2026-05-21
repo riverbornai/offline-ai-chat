@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -10,7 +11,6 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
@@ -43,7 +43,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { chatSessionStore, modelStore } = useStores();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -67,7 +67,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     if (!cleaned || isLoading) return;
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
-      const errorMessage = hasDownloadedModel 
+      const errorMessage = hasDownloadedModel
         ? '❌ Model is downloaded but not loaded. Go to the Models tab and tap "Load Model" to start chatting.'
         : '❌ No model available. Please download and load a language model first. Go to the Models tab to set up a model.';
       chatSessionStore.addMessage({
@@ -153,9 +153,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const renderWelcomeMessage = () => {
     const hasModel = modelStore.context !== undefined;
     const hasDownloadedModel = modelStore.availableModels.length > 0;
-    
+
     return (
-      <View style={[styles.welcomeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+      <View style={[styles.welcomeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={[styles.welcomeIconContainer, { backgroundColor: `${colors.primary}15` }]}>
           <Ionicons name="sparkles" size={32} color={colors.primary} />
         </View>
@@ -163,10 +163,10 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           {!hasModel && !hasDownloadedModel ? 'Welcome to AI Chat!' : hasDownloadedModel && !hasModel ? 'Model Ready!' : 'Start Chatting!'}
         </Text>
         <Text style={[styles.welcomeText, { color: colors.text }]}>
-          {!hasModel && !hasDownloadedModel 
-            ? 'Download a model to begin your AI companion experience.' 
-            : hasDownloadedModel && !hasModel 
-              ? 'Your model is ready to go. Just load it in the Models tab.' 
+          {!hasModel && !hasDownloadedModel
+            ? 'Download a model to begin your AI companion experience.'
+            : hasDownloadedModel && !hasModel
+              ? 'Your model is ready to go. Just load it in the Models tab.'
               : 'I\'m ready to help! What would you like to talk about today?'}
         </Text>
         {!hasModel && (
@@ -188,8 +188,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
-      <KeyboardAvoidingView 
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 12,
     textAlign: 'center',
     letterSpacing: -0.5,
@@ -267,6 +267,7 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'Sora-Medium',
     textAlign: 'center',
     opacity: 0.7,
     marginBottom: 20,
@@ -278,7 +279,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   loadingBubble: {
     flexDirection: 'row',
@@ -294,7 +295,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
   },
   errorContainer: {
     flex: 1,
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     textAlign: 'center',
     marginTop: 16,
   },

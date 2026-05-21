@@ -306,11 +306,11 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
   placeholderText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Sora-Medium',
     opacity: 0.6,
   },
   micButton: {

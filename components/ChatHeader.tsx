@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: 'Sora-Bold',
     marginBottom: 4,
     letterSpacing: -0.3,
   },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     textTransform: 'uppercase',
   },
   statusIndicator: {
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
   },
 });
 

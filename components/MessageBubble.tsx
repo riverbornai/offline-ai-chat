@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: '500',
+    fontFamily: 'Sora-Medium',
   },
   footer: {
     flexDirection: 'row',
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: 'Sora-Bold',
     textTransform: 'uppercase',
   },
   speakerButton: {
