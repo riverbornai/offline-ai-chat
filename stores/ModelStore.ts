@@ -129,6 +129,7 @@ class ModelStore {
   isContextLoading: boolean = false;
   isInferencing: boolean = false;
   isQuickSetupLoading: boolean = false;
+  isOnboardingComplete: boolean = false;
 
   // Context settings - optimized for Android
   n_context: number = 1024;  // Reduced for better memory usage
@@ -160,7 +161,8 @@ class ModelStore {
         'n_gpu_layers',
         'n_threads',
         'n_batch',
-        'defaultCompletionParams'
+        'defaultCompletionParams',
+        'isOnboardingComplete'
       ],
       storage: Storage,
     }).then(() => {
@@ -327,6 +329,16 @@ class ModelStore {
       
       // Check existing models and update their status
       await this.updateModelStatus();
+
+      // Automatically complete onboarding if any LLM and TTS models are already downloaded
+      const hasLlm = this.models.some(m => m.isDownloaded && m.type === 'llm');
+      const hasTts = this.models.some(m => m.isDownloaded && m.type === 'tts');
+      if (hasLlm && hasTts && !this.isOnboardingComplete) {
+        runInAction(() => {
+          this.isOnboardingComplete = true;
+        });
+        console.log('[ModelStore] Auto-completed onboarding since models are already downloaded');
+      }
     } catch (error) {
       console.error('Failed to initialize LLM library:', error);
       console.log('📱 This usually means you need to rebuild the app with native libraries');
@@ -401,6 +413,12 @@ class ModelStore {
   setQuickSetupLoading = (loading: boolean) => {
     runInAction(() => {
       this.isQuickSetupLoading = loading;
+    });
+  };
+
+  setIsOnboardingComplete = (complete: boolean) => {
+    runInAction(() => {
+      this.isOnboardingComplete = complete;
     });
   };
 

@@ -38,40 +38,53 @@ export interface RealtimeTranscriptionCallbacks {
   onError?: (error: Error) => void;
   onComplete?: (finalResult: WhisperResult) => void;
 }
-
 class WhisperService {
   private context: any = null;
   private realtimeTranscriber: any = null;
   private modelLoaded = false;
   private modelPath: string | null = null;
   private isRealtimeActive = false;
+  private initializingPromise: Promise<void> | null = null;
 
   async initialize(): Promise<void> {
-    try {
-      console.log('Initializing Whisper service...');
-      
-      if (!isWhisperAvailable || !initWhisper) {
-        throw new Error('whisper.rn native module is not available. Please install whisper.rn for real transcription.');
-      }
-      
-      // Check if model exists in assets first, then in documents directory
-      const modelExists = await this.checkModelExists();
-      
-      if (!modelExists) {
-        console.log('Model not found, downloading...');
-        await this.downloadModel(); // Wait for download to finish before loading model
-      }
-      
-      // Initialize Whisper context
-      await this.loadModel();
-      
-      this.modelLoaded = true;
-      console.log('Whisper service initialized successfully');
-      
-    } catch (error) {
-      console.error('Failed to initialize Whisper service:', error);
-      throw error;
+    if (this.modelLoaded) {
+      return;
     }
+    if (this.initializingPromise) {
+      return this.initializingPromise;
+    }
+
+    this.initializingPromise = (async () => {
+      try {
+        console.log('Initializing Whisper service...');
+        
+        if (!isWhisperAvailable || !initWhisper) {
+          throw new Error('whisper.rn native module is not available. Please install whisper.rn for real transcription.');
+        }
+        
+        // Check if model exists in assets first, then in documents directory
+        const modelExists = await this.checkModelExists();
+        
+        if (!modelExists) {
+          console.log('Model not found, downloading...');
+          await this.downloadModel(); // Wait for download to finish before loading model
+        }
+        
+        // Initialize Whisper context
+        await this.loadModel();
+        
+        this.modelLoaded = true;
+        console.log('Whisper service initialized successfully');
+        
+      } catch (error) {
+        console.error('Failed to initialize Whisper service:', error);
+        throw error;
+      } finally {
+        this.initializingPromise = null;
+      }
+    })();
+
+    return this.initializingPromise;
   }
 
   private async checkModelExists(): Promise<boolean> {
@@ -149,7 +162,8 @@ class WhisperService {
 
   async transcribe(audioPath: string): Promise<WhisperResult> {
     if (!this.modelLoaded) {
-      throw new Error('Whisper model not loaded');
+      console.log('Whisper model not loaded. Attempting automatic initialization...');
+      await this.initialize();
     }
 
     if (!isWhisperAvailable || !this.context) {
@@ -193,7 +207,8 @@ class WhisperService {
 
   async startRealtimeTranscription(callbacks: RealtimeTranscriptionCallbacks): Promise<void> {
     if (!this.modelLoaded) {
-      throw new Error('Whisper model not loaded');
+      console.log('Whisper model not loaded. Attempting automatic initialization...');
+      await this.initialize();
     }
 
     if (!isWhisperAvailable || !this.context) {

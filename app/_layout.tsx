@@ -81,6 +81,9 @@ try {
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { StoreProvider } from '../components/StoreProvider';
 import { quickSetup } from '../utils/modelSetup';
+import { modelStore } from '../stores/ModelStore';
+import { observer } from 'mobx-react';
+import OnboardingScreen from '../components/OnboardingScreen';
 
 import { Colors } from '../constants/Colors';
 
@@ -108,7 +111,7 @@ const CustomDarkTheme = {
   },
 };
 
-export default function RootLayout() {
+export default observer(function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
@@ -121,6 +124,10 @@ export default function RootLayout() {
   useEffect(() => {
     const initializeModels = async () => {
       try {
+        if (!modelStore.isOnboardingComplete) {
+          console.log('⏳ Skipping initial setup: Onboarding incomplete.');
+          return;
+        }
         console.log('🚀 Initializing language learning models...');
         await quickSetup();
       } catch (error) {
@@ -143,12 +150,16 @@ export default function RootLayout() {
   return (
     <StoreProvider>
       <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomLightTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
+        {!modelStore.isOnboardingComplete ? (
+          <OnboardingScreen />
+        ) : (
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        )}
         <StatusBar style="auto" />
       </ThemeProvider>
     </StoreProvider>
   );
-}
+});
