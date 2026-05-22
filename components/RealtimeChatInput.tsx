@@ -85,6 +85,22 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
     };
   }, []);
 
+  // Proactively initialize Whisper model on mount
+  React.useEffect(() => {
+    const initWhisper = async () => {
+      try {
+        if (whisperService.isWhisperAvailable() && !whisperService.isModelLoaded()) {
+          console.log('RealtimeChatInput: Proactively initializing Whisper model...');
+          await whisperService.initialize();
+          console.log('RealtimeChatInput: Whisper model initialized successfully.');
+        }
+      } catch (error) {
+        console.error('RealtimeChatInput: Failed to proactively initialize Whisper model:', error);
+      }
+    };
+    initWhisper();
+  }, []);
+
   const startRecording = async () => {
     if (!hasPermission) {
       Alert.alert('Permission Required', 'Please grant microphone permission to record audio.');

@@ -1,11 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
+import { modelStore } from '../../stores/ModelStore';
+import { observer } from 'mobx-react';
 
-export default function SettingsScreen() {
+const SettingsScreen = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
@@ -20,6 +22,34 @@ export default function SettingsScreen() {
       <Text style={[styles.itemValue, { color: colors.muted }]}>{value}</Text>
     </View>
   );
+
+  const handleResetOnboarding = () => {
+    Alert.alert(
+      'Reset Onboarding',
+      'Are you sure you want to rerun the setup onboarding? This will allow you to download and load new models.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Reset', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Release active context
+              await modelStore.releaseContext();
+              // Clean up voice engine
+              const { ttsService } = await import('../../services/ttsService');
+              await ttsService.cleanup();
+              // Reset flag
+              modelStore.setIsOnboardingComplete(false);
+            } catch (err) {
+              console.error('Failed to reset models:', err);
+              modelStore.setIsOnboardingComplete(false);
+            }
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -40,6 +70,13 @@ export default function SettingsScreen() {
           <SettingItem icon="volume-high" label="TTS Engine" value="Piper (Local)" />
           <SettingItem icon="mic" label="STT Engine" value="Whisper (Local)" />
         </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>SYSTEM SETUP</Text>
+          <TouchableOpacity onPress={handleResetOnboarding}>
+            <SettingItem icon="refresh-circle" label="Reset & Rerun Onboarding" value="Reset" />
+          </TouchableOpacity>
+        </View>
         
         <View style={styles.footer}>
             <Text style={[styles.footerText, { color: colors.muted }]}>Version 1.0.0</Text>
@@ -47,7 +84,9 @@ export default function SettingsScreen() {
       </ScrollView>
     </SafeAreaView>
   );
-}
+});
+
+export default SettingsScreen;
 
 const styles = StyleSheet.create({
   container: {
