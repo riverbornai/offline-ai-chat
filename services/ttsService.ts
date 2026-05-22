@@ -96,7 +96,7 @@ class TTSService {
           }
           
           console.log(`[TTSService] Copying ${source} to ${target}...`);
-          await FileSystem.copyAsync({ from: sourcePath, to: target });
+          await FileSystem.copyAsync({ from: sourcePath, to: targetPath });
         };
 
         // Copy required files
