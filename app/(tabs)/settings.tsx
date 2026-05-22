@@ -6,22 +6,65 @@ import { useColorScheme } from '../../hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { modelStore } from '../../stores/ModelStore';
 import { observer } from 'mobx-react';
+import { useRouter } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
+import { ttsService } from '../../services/ttsService';
 
 const SettingsScreen = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const router = useRouter();
+  const isFocused = useIsFocused();
 
-  const SettingItem = ({ icon, label, value }: { icon: string, label: string, value: string }) => (
-    <View style={[styles.item, { borderBottomColor: colors.border }]}>
-      <View style={styles.itemLeft}>
-        <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}15` }]}>
-          <Ionicons name={icon as any} size={20} color={colors.primary} />
+  // State to track loaded TTS engine (since ttsService state is not a MobX store)
+  const [activeTtsId, setActiveTtsId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isFocused) return;
+    const sync = () => {
+      setActiveTtsId(ttsService.getIsLoaded() ? ttsService.getActiveModelId() : null);
+    };
+    sync();
+    const interval = setInterval(sync, 1000);
+    return () => clearInterval(interval);
+  }, [isFocused]);
+
+  // Read human-friendly names for active engines
+  const activeLlm = modelStore.activeModel?.name || 'Tap to select';
+  const activeTtsModel = modelStore.models.find(m => m.id === activeTtsId && m.type === 'tts');
+  const activeTtsName = activeTtsModel ? activeTtsModel.name : 'Tap to select';
+
+  const SettingItem = ({ 
+    icon, 
+    label, 
+    value, 
+    onPress 
+  }: { 
+    icon: string; 
+    label: string; 
+    value: string; 
+    onPress?: () => void; 
+  }) => {
+    const Container = onPress ? TouchableOpacity : View;
+    return (
+      <Container 
+        onPress={onPress} 
+        style={[styles.item, { borderBottomColor: colors.border }]}
+        activeOpacity={0.7}
+      >
+        <View style={styles.itemLeft}>
+          <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}15` }]}>
+            <Ionicons name={icon as any} size={20} color={colors.primary} />
+          </View>
+          <Text style={[styles.itemLabel, { color: colors.text }]}>{label}</Text>
         </View>
-        <Text style={[styles.itemLabel, { color: colors.text }]}>{label}</Text>
-      </View>
-      <Text style={[styles.itemValue, { color: colors.muted }]}>{value}</Text>
-    </View>
-  );
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.itemValue, { color: colors.muted }]}>{value}</Text>
+          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.muted} />}
+        </View>
+      </Container>
+    );
+  };
 
   const handleResetOnboarding = () => {
     Alert.alert(
@@ -37,7 +80,6 @@ const SettingsScreen = observer(() => {
               // Release active context
               await modelStore.releaseContext();
               // Clean up voice engine
-              const { ttsService } = await import('../../services/ttsService');
               await ttsService.cleanup();
               // Reset flag
               modelStore.setIsOnboardingComplete(false);
@@ -66,8 +108,19 @@ const SettingsScreen = observer(() => {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>VOICE</Text>
-          <SettingItem icon="volume-high" label="TTS Engine" value="Piper (Local)" />
+          <Text style={[styles.sectionTitle, { color: colors.primary }]}>LOCAL AI & SPEECH</Text>
+          <SettingItem 
+            icon="chatbubbles" 
+            label="AI Chat Model" 
+            value={activeLlm} 
+            onPress={() => router.push({ pathname: '/models', params: { initialTab: 'llm' } })}
+          />
+          <SettingItem 
+            icon="volume-high" 
+            label="Voice Engine (TTS)" 
+            value={activeTtsName} 
+            onPress={() => router.push({ pathname: '/models', params: { initialTab: 'tts' } })}
+          />
           <SettingItem icon="mic" label="STT Engine" value="Whisper (Local)" />
         </View>
 

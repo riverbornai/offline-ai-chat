@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
 import { useStores } from '../../components/StoreProvider';
@@ -25,7 +26,18 @@ const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { modelStore } = useStores();
-  const [activeTab, setActiveTab] = useState<'llm' | 'tts'>('llm');
+  const router = useRouter();
+
+  // Retrieve initial tab from query params (e.g. from Settings screen)
+  const { initialTab } = useLocalSearchParams<{ initialTab?: 'llm' | 'tts' }>();
+  const [activeTab, setActiveTab] = useState<'llm' | 'tts'>(initialTab === 'tts' ? 'tts' : 'llm');
+
+  // Synchronize active tab when initialTab param changes
+  React.useEffect(() => {
+    if (initialTab === 'llm' || initialTab === 'tts') {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // State for setup feedback
   const [setupMessage, setSetupMessage] = useState<string>('');
@@ -543,13 +555,22 @@ const ModelCard: React.FC<{
 
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <View style={styles.headerTitleContainer}>
-          <Ionicons name="hardware-chip-outline" size={32} color={colors.primary} />
-          <View>
-            <Text style={[styles.title, { color: colors.text }]}>Local Models</Text>
-            <Text style={[styles.subtitle, { color: colors.muted }]}>High-performance offline AI</Text>
+        <View style={styles.headerTopBar}>
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={[styles.backButton, { backgroundColor: `${colors.primary}10` }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Ionicons name="hardware-chip-outline" size={24} color={colors.primary} />
+            <View>
+              <Text style={[styles.title, { color: colors.text }]}>Local Models</Text>
+              <Text style={[styles.subtitle, { color: colors.muted }]}>High-performance offline AI</Text>
+            </View>
           </View>
         </View>
 
@@ -687,23 +708,39 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.05)',
   },
-  title: {
-    fontSize: 32,
-    fontFamily: 'Sora-Bold',
+  headerTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
     marginBottom: 8,
-    letterSpacing: -0.5,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  title: {
+    fontSize: 24,
+    fontFamily: 'Sora-Bold',
+    letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 13,
     fontFamily: 'Sora-Medium',
-    opacity: 0.7,
-    marginBottom: 20,
+    opacity: 0.6,
   },
   tabBar: {
     flexDirection: 'row',
@@ -963,6 +1000,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  progressText: {
+    fontSize: 14,
+    fontFamily: 'Sora-Bold',
+    marginLeft: 12,
+    flex: 1,
   },
 });
 

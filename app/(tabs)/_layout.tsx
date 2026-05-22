@@ -56,9 +56,7 @@ export default function TabLayout() {
         name="models"
         options={{
           title: 'Models',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'cube' : 'cube-outline'} size={24} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
