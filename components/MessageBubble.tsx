@@ -21,11 +21,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onLongPress,
 }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const formatTime = (timestamp: number) => {
+  const formatTime = (timestamp?: number) => {
+    if (!timestamp) return '';
     const date = new Date(timestamp);
     return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
+      hour: 'numeric',
       minute: '2-digit',
+      hour12: true,
     });
   };
 
@@ -92,10 +94,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               styles.timestamp,
               {
                 color: isUser ? colors.surface : colors.muted,
-                opacity: 0.6,
+                opacity: 0.7,
               },
             ]}
           >
+            {formatTime(message.timestamp)}
           </Text>
           
           {!isUser && message.text.length > 0 && message.type !== 'transcription' && (

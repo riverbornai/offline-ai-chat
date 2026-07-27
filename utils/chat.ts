@@ -1,9 +1,9 @@
 import { ChatMessage } from '../stores/ChatSessionStore';
 
 export interface ConversationContext {
-  targetLanguage: string;
-  nativeLanguage: string;
-  learningLevel: 'beginner' | 'intermediate' | 'advanced';
+  targetLanguage?: string;
+  nativeLanguage?: string;
+  learningLevel?: 'beginner' | 'intermediate' | 'advanced';
   topic?: string;
 }
 
@@ -47,8 +47,6 @@ ${historyContext}
 User: ${userInput}
 Assistant:`;
   }
-
-
 }
 
 // Message formatting utilities

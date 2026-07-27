@@ -264,7 +264,7 @@ const SpeechToText: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f2ffee', // Riverborn Frost
     padding: 20,
   },
   loadingContainer: {
@@ -274,13 +274,14 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
     marginTop: 20,
-    color: '#333',
+    color: '#0d2b22', // Riverborn Forest
   },
   loadingSubtext: {
     fontSize: 14,
-    color: '#666',
+    fontFamily: 'Sora-Medium',
+    color: '#265c48',
     marginTop: 8,
   },
   header: {
@@ -289,18 +290,20 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
+    fontFamily: 'Sora-Bold',
+    color: '#0d2b22',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Sora-Medium',
+    color: '#265c48',
     marginBottom: 8,
   },
   note: {
     fontSize: 12,
-    color: '#999',
+    fontFamily: 'Sora-Medium',
+    color: '#546565',
     fontStyle: 'italic',
   },
   controlsContainer: {
@@ -308,23 +311,28 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   recordButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0d2b22', // Riverborn Forest
     paddingHorizontal: 40,
     paddingVertical: 15,
     borderRadius: 25,
     minWidth: 200,
     alignItems: 'center',
+    shadowColor: '#0d2b22',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   recordingButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#ef4444',
   },
   disabledButton: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#9fcebe',
   },
   recordButtonText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   transcribingContainer: {
     flexDirection: 'row',
@@ -334,19 +342,20 @@ const styles = StyleSheet.create({
   transcribingText: {
     marginLeft: 10,
     fontSize: 16,
-    color: '#666',
+    fontFamily: 'Sora-Medium',
+    color: '#265c48',
   },
   clearButton: {
     marginTop: 15,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: '#FF9500',
+    backgroundColor: '#f59e0b',
     borderRadius: 20,
   },
   clearButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   transcriptionContainer: {
     flex: 1,
@@ -357,7 +366,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 12,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: '#0d2b22',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,

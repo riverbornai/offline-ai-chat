@@ -93,7 +93,10 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     let tokensReceived = 0;
     try {
       const conversationContext = {
-        topic: topic || '',
+        targetLanguage: chatSessionStore.activeSession?.targetLanguage || chatSessionStore.settings.targetLanguage,
+        nativeLanguage: chatSessionStore.activeSession?.nativeLanguage || chatSessionStore.settings.nativeLanguage,
+        learningLevel: chatSessionStore.settings.learningLevel,
+        topic: topic || chatSessionStore.activeSession?.title || '',
       };
       const promptBuilder = new ConversationPromptBuilder(conversationContext);
       const prompt = promptBuilder.buildPrompt(cleaned, chatSessionStore.currentMessages);

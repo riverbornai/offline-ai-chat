@@ -232,7 +232,7 @@ const WhisperSpeechToText: React.FC = () => {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color="#0d2b22" />
           <Text style={styles.loadingText}>Loading Whisper Model...</Text>
           <Text style={styles.loadingSubtext}>
             Initializing {WHISPER_CONFIG.modelName}
@@ -304,7 +304,7 @@ const WhisperSpeechToText: React.FC = () => {
 
         {isTranscribing && (
           <View style={styles.transcribingContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
+            <ActivityIndicator size="small" color="#0d2b22" />
             <Text style={styles.transcribingText}>Transcribing...</Text>
           </View>
         )}
@@ -352,7 +352,7 @@ const WhisperSpeechToText: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f2ffee', // Riverborn Frost
     padding: 20,
   },
   loadingContainer: {
@@ -363,14 +363,15 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 20,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
     marginTop: 20,
-    color: '#1e293b',
+    color: '#0d2b22', // Riverborn Forest
     textAlign: 'center',
   },
   loadingSubtext: {
     fontSize: 14,
-    color: '#64748b',
+    fontFamily: 'Sora-Medium',
+    color: '#265c48',
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
@@ -382,13 +383,14 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0d2b22', // Riverborn Forest
     borderRadius: 2,
     marginBottom: 8,
   },
   progressText: {
     fontSize: 12,
-    color: '#64748b',
+    fontFamily: 'Sora-Medium',
+    color: '#265c48',
   },
   errorContainer: {
     flex: 1,
@@ -398,19 +400,20 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#dc2626',
+    fontFamily: 'Sora-Bold',
+    color: '#ef4444',
     marginBottom: 16,
   },
   errorText: {
     fontSize: 14,
-    color: '#64748b',
+    fontFamily: 'Sora-Medium',
+    color: '#546565',
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0d2b22',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -418,7 +421,7 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   header: {
     alignItems: 'center',
@@ -426,37 +429,39 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    fontFamily: 'Sora-Bold',
+    color: '#0d2b22',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#64748b',
+    fontFamily: 'Sora-Medium',
+    color: '#265c48',
     marginBottom: 12,
   },
   statusBadge: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#ebf5f1',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: '#cce8df',
     marginBottom: 8,
   },
   statusText: {
     fontSize: 12,
-    color: '#166534',
-    fontWeight: '600',
+    color: '#0d2b22',
+    fontFamily: 'Sora-Bold',
   },
   modelPathText: {
     fontSize: 10,
-    color: '#94a3b8',
+    fontFamily: 'Sora-Medium',
+    color: '#6aa98c',
     textAlign: 'center',
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#ebf5f1',
     borderRadius: 12,
     padding: 4,
     marginBottom: 24,
@@ -469,8 +474,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: {
-    backgroundColor: '#3b82f6',
-    boxShadow: '0 2px 8px rgba(59, 130, 246, 0.25)',
+    backgroundColor: '#0d2b22',
     elevation: 4,
   },
   inactiveTab: {
@@ -478,44 +482,44 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
     letterSpacing: 0.1,
   },
   activeTabText: {
     color: 'white',
   },
   inactiveTabText: {
-    color: '#64748b',
+    color: '#546565',
   },
   controlsContainer: {
     alignItems: 'center',
     marginBottom: 30,
   },
   recordButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0d2b22', // Riverborn Forest
     paddingHorizontal: 40,
     paddingVertical: 16,
     borderRadius: 25,
     minWidth: 220,
     alignItems: 'center',
-    shadowColor: '#007AFF',
+    shadowColor: '#0d2b22',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   recordingButton: {
-    backgroundColor: '#dc2626',
-    shadowColor: '#dc2626',
+    backgroundColor: '#ef4444',
+    shadowColor: '#ef4444',
   },
   disabledButton: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: '#9fcebe',
     shadowOpacity: 0.1,
   },
   recordButtonText: {
     color: 'white',
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   recordingIndicator: {
     marginTop: 16,
@@ -526,11 +530,11 @@ const styles = StyleSheet.create({
   },
   recordingText: {
     fontSize: 14,
-    color: '#dc2626',
-    fontWeight: '500',
+    color: '#ef4444',
+    fontFamily: 'Sora-Medium',
   },
   uploadButton: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#8faa20',
     paddingVertical: 18,
     paddingHorizontal: 32,
     borderRadius: 16,
@@ -538,21 +542,20 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     minHeight: 64,
     justifyContent: 'center',
-    boxShadow: '0 4px 24px rgba(16, 185, 129, 0.25)',
     elevation: 8,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: 'rgba(13, 43, 34, 0.1)',
   },
   uploadButtonText: {
     color: 'white',
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   transcribingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 16,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#ebf5f1',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -560,8 +563,8 @@ const styles = StyleSheet.create({
   transcribingText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#1e40af',
-    fontWeight: '500',
+    color: '#0d2b22',
+    fontFamily: 'Sora-Medium',
   },
   clearButton: {
     marginTop: 16,
@@ -573,7 +576,7 @@ const styles = StyleSheet.create({
   clearButtonText: {
     color: 'white',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Sora-Bold',
   },
   transcriptionContainer: {
     flex: 1,
@@ -584,59 +587,61 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: '#0d2b22',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(13, 43, 34, 0.12)',
   },
   transcriptionLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontFamily: 'Sora-Bold',
+    color: '#0d2b22',
     marginBottom: 12,
   },
   transcriptionText: {
     fontSize: 16,
-    color: '#374151',
+    fontFamily: 'Sora-Medium',
+    color: '#1a4435',
     lineHeight: 24,
   },
   historyContainer: {
     backgroundColor: 'white',
     padding: 20,
     borderRadius: 16,
-    shadowColor: '#000',
+    shadowColor: '#0d2b22',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: 'rgba(13, 43, 34, 0.12)',
   },
   historyLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+    fontFamily: 'Sora-Bold',
+    color: '#0d2b22',
     marginBottom: 16,
   },
   historyItem: {
     flexDirection: 'row',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#ebf5f1',
   },
   historyNumber: {
     fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '600',
+    color: '#6aa98c',
+    fontFamily: 'Sora-Bold',
     marginRight: 8,
     minWidth: 20,
   },
   historyText: {
     fontSize: 14,
-    color: '#374151',
+    color: '#1a4435',
+    fontFamily: 'Sora-Medium',
     lineHeight: 20,
     flex: 1,
   },
@@ -645,11 +650,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: 'rgba(13, 43, 34, 0.12)',
   },
   footerText: {
     fontSize: 12,
-    color: '#64748b',
+    fontFamily: 'Sora-Medium',
+    color: '#546565',
   },
 });
 
