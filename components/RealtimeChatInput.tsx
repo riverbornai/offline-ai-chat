@@ -135,9 +135,14 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
       try {
         await whisperService.startRealtimeTranscription({
           onTranscriptionUpdate: (result: RealtimeTranscriptionResult) => {
-            setTranscription(result.text);
-            chatSessionStore.updateTranscriptionMessage(result.text, result.isFinal);
-            let cleaned = result.text.replace(/\[BLANK_AUDIO\]/gi, '').trim();
+            const cleaned = result.text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim();
+            if (cleaned) {
+              setTranscription(cleaned);
+              chatSessionStore.updateTranscriptionMessage(cleaned, result.isFinal);
+            } else {
+              setTranscription('');
+              chatSessionStore.clearTranscriptionMessage();
+            }
             if (result.isFinal && cleaned && !messageSent.current) {
               messageSent.current = true;
               chatSessionStore.clearTranscriptionMessage();
@@ -336,7 +341,7 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 10,
   },
   textInputWrapper: {
@@ -354,6 +359,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora-Medium',
     lineHeight: 22,
     maxHeight: 100,
+    paddingTop: 0,
+    paddingBottom: 0,
+    textAlignVertical: 'center',
   },
   actionButton: {
     width: 48,

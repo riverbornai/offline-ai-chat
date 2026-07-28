@@ -1,26 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Platform,
-  SafeAreaView
-} from 'react-native';
-import { observer } from 'mobx-react';
 import { Ionicons } from '@expo/vector-icons';
 import RNBackgroundDownloader, { ErrorHandlerObject, ProgressHandlerObject } from '@kesha-antonov/react-native-background-downloader';
+import { observer } from 'mobx-react';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useStores } from './StoreProvider';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { AVAILABLE_MODELS, downloadModel, initializeModel } from '../utils/modelSetup';
-import { formatBytes, getModelFileInfo, checkModelFileExists } from '../utils/platformPaths';
-import { ttsService } from '../services/ttsService';
+import { getModelFileInfo } from '../utils/platformPaths';
+import { useStores } from './StoreProvider';
 
 const { width } = Dimensions.get('window');
 
@@ -62,11 +59,11 @@ const OnboardingScreen: React.FC = observer(() => {
           const modelEntry = Object.entries(AVAILABLE_MODELS).find(
             ([_, config]) => config.filename === activeTask.id
           );
-          
+
           if (modelEntry) {
             const [modelId] = modelEntry;
             const modelConfig = AVAILABLE_MODELS[modelId];
-            
+
             // Auto route to correct step depending on model type
             const appModel = modelStore.models.find(m => m.id === modelId);
             if (appModel) {
@@ -77,11 +74,11 @@ const OnboardingScreen: React.FC = observer(() => {
                 setSelectedTtsId(modelId);
                 setStep('tts');
               }
-              
+
               setDownloadingModelId(modelId);
               setDownloadStatus('progress');
               setStatusMessage('Resuming background download...');
-              
+
               if (activeTask.bytesTotal > 0) {
                 setDownloadProgress(activeTask.bytesDownloaded / activeTask.bytesTotal);
               }
@@ -112,7 +109,7 @@ const OnboardingScreen: React.FC = observer(() => {
     try {
       const config = AVAILABLE_MODELS[modelId];
       const info = await getModelFileInfo(config.filename);
-      
+
       if (info && info.exists && info.size > 5 * 1024 * 1024) {
         setDownloadStatus('success');
         setStatusMessage('Installation complete!');
@@ -127,7 +124,7 @@ const OnboardingScreen: React.FC = observer(() => {
           setDownloadProgress(0);
           setDownloadingModelId(null);
           setStatusMessage('');
-          
+
           // Route to next step
           const appModel = modelStore.models.find(m => m.id === modelId);
           if (appModel?.type === 'llm') {
@@ -198,7 +195,7 @@ const OnboardingScreen: React.FC = observer(() => {
   const startSystemInitialization = async () => {
     setStep('initializing');
     setLlmInitStatus('loading');
-    
+
     try {
       // 1. Initialize LLM model context
       console.log(`[Onboarding] Starting context init for LLM: ${selectedLlmId}`);
@@ -241,32 +238,36 @@ const OnboardingScreen: React.FC = observer(() => {
 
   // Views rendering
   const renderWelcome = () => (
-    <View style={styles.contentContainer}>
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.welcomeScrollContent}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={[styles.welcomeIconWrapper, { backgroundColor: `${colors.primary}12` }]}>
-        <Ionicons name="hardware-chip-outline" size={60} color={colors.primary} />
+        <Ionicons name="sparkles" size={56} color={colors.primary} />
       </View>
-      
+
       <Text style={[styles.title, { color: colors.text }]}>AI Chat</Text>
       <Text style={[styles.subtitle, { color: colors.muted }]}>
-        Your 100% private, offline language tutor.
+        Your private, offline AI assistant.
       </Text>
 
       <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="sparkles" size={24} color={colors.warning} style={styles.cardIcon} />
+        <Ionicons name="shield-checkmark" size={24} color={colors.primary} style={styles.cardIcon} />
         <View style={styles.cardTextContainer}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>No Internet Required</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>100% Offline & Private</Text>
           <Text style={[styles.cardDesc, { color: colors.muted }]}>
-            All AI computation is performed entirely on your device. Zero cloud dependency and complete privacy.
+            All processing happens locally on your device with zero data sharing.
           </Text>
         </View>
       </View>
 
       <View style={[styles.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Ionicons name="download" size={24} color={colors.success} style={styles.cardIcon} />
+        <Ionicons name="hardware-chip" size={24} color={colors.success} style={styles.cardIcon} />
         <View style={styles.cardTextContainer}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>One-Time Setup</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Quick Setup</Text>
           <Text style={[styles.cardDesc, { color: colors.muted }]}>
-            We will guide you through installing a lightweight AI brain and a realistic voice engine (~1.5GB total).
+            Configure your preferred AI brain and voice engine in a few simple steps.
           </Text>
         </View>
       </View>
@@ -278,55 +279,55 @@ const OnboardingScreen: React.FC = observer(() => {
         <Text style={[styles.actionButtonText, { color: colors.surface }]}>Get Started</Text>
         <Ionicons name="arrow-forward" size={20} color={colors.surface} />
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 
   const renderLlmSelector = () => {
     const isDownloading = downloadingModelId !== null;
 
-    const llmModels = [
-      {
-        id: 'tinyllama-1.1b-chat-v1.0-q4_k_m',
-        name: 'TinyLlama-1.1B Chat',
-        size: '638MB',
-        desc: 'Lightning-fast chat, perfect for older or budget devices.',
-        badge: 'Fast & Tiny',
-        badgeColor: colors.success
-      },
-      {
-        id: 'phi-4-mini-iq2_m',
-        name: 'Phi-4 Mini (Light)',
-        size: '1.40GB',
-        desc: 'Advanced reasoning, math, and tutoring capabilities. Balanced speed/accuracy.',
-        badge: 'Recommended',
-        badgeColor: colors.primary
-      },
-      {
-        id: 'gemma-4-e2b-it',
-        name: 'Gemma 4 E2B (Small)',
-        size: '2.62GB',
-        desc: 'Google Gemini 4 high-end conversational model. Beautiful support for multi-language tutoring.',
-        badge: 'High Accuracy',
-        badgeColor: colors.warning
-      }
-    ];
+    const llmModels = modelStore.models
+      .filter(m => m.type === 'llm')
+      .map(m => {
+        let badge = 'Available';
+        let badgeColor = colors.primary;
+
+        if (m.id === 'tinyllama-1.1b-chat-v1.0-q4_k_m') {
+          badge = 'Fast & Tiny';
+          badgeColor = colors.success;
+        } else if (m.id === 'phi-4-mini-iq2_m' || m.id === 'phi3-mini-4k-instruct') {
+          badge = 'Recommended';
+          badgeColor = colors.primary;
+        } else if (m.id.includes('gemma') || m.id.includes('phi-4-mini-instruct')) {
+          badge = 'High Accuracy';
+          badgeColor = colors.warning;
+        }
+
+        return {
+          id: m.id,
+          name: m.name,
+          size: m.size || 'N/A',
+          desc: m.description || 'Offline AI language model.',
+          badge,
+          badgeColor
+        };
+      });
 
     return (
       <View style={styles.contentContainer}>
-        <View style={styles.stepHeader}>
-          <Text style={[styles.stepLabel, { color: colors.primary }]}>STEP 1 OF 3</Text>
-          <Text style={[styles.stepTitle, { color: colors.text }]}>Install AI Brain</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.muted }]}>
-            Select a lightweight, specialized offline AI model.
-          </Text>
-        </View>
-
         {!isDownloading ? (
-          <ScrollView 
-            style={styles.scrollView} 
+          <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.scrollContainer}
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.stepHeader}>
+              <Text style={[styles.stepLabel, { color: colors.primary }]}>STEP 1 OF 3</Text>
+              <Text style={[styles.stepTitle, { color: colors.text }]}>Choose AI Model</Text>
+              <Text style={[styles.stepSubtitle, { color: colors.muted }]}>
+                Select a local language model for conversation.
+              </Text>
+            </View>
+
             {llmModels.map(m => (
               <TouchableOpacity
                 key={m.id}
@@ -350,7 +351,7 @@ const OnboardingScreen: React.FC = observer(() => {
                   </View>
                 </View>
                 <Text style={[styles.selectorDesc, { color: colors.muted }]}>{m.desc}</Text>
-                
+
                 {selectedLlmId === m.id && (
                   <View style={styles.selectedMarker}>
                     <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
@@ -358,6 +359,14 @@ const OnboardingScreen: React.FC = observer(() => {
                 )}
               </TouchableOpacity>
             ))}
+
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.primary, marginTop: 12 }]}
+              onPress={() => handleStartDownload(selectedLlmId)}
+            >
+              <Text style={[styles.actionButtonText, { color: colors.surface }]}>Download & Install</Text>
+              <Ionicons name="cloud-download" size={20} color={colors.surface} />
+            </TouchableOpacity>
           </ScrollView>
         ) : (
           <View style={styles.downloadContainer}>
@@ -365,12 +374,12 @@ const OnboardingScreen: React.FC = observer(() => {
               <Ionicons name="cloud-download-outline" size={48} color={colors.primary} />
             </View>
             <Text style={[styles.downloadLabel, { color: colors.text }]}>
-              Downloading AI Brain...
+              Downloading AI Model...
             </Text>
             <Text style={[styles.downloadStatusText, { color: colors.muted }]}>
               {statusMessage}
             </Text>
-            
+
             <View style={styles.progressSection}>
               <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
                 <View
@@ -397,21 +406,11 @@ const OnboardingScreen: React.FC = observer(() => {
                 <Text style={[styles.retryText, { color: colors.surface }]}>Retry Download</Text>
               </TouchableOpacity>
             )}
-            
+
             <Text style={[styles.cautionText, { color: colors.muted }]}>
-              Please keep the app open and connected to Wi-Fi. Large files may take a few minutes.
+              Please keep the app open during download.
             </Text>
           </View>
-        )}
-
-        {!isDownloading && (
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary }]}
-            onPress={() => handleStartDownload(selectedLlmId)}
-          >
-            <Text style={[styles.actionButtonText, { color: colors.surface }]}>Download & Install</Text>
-            <Ionicons name="cloud-download" size={20} color={colors.surface} />
-          </TouchableOpacity>
         )}
       </View>
     );
@@ -420,41 +419,46 @@ const OnboardingScreen: React.FC = observer(() => {
   const renderTtsSelector = () => {
     const isDownloading = downloadingModelId !== null;
 
-    const ttsModels = [
-      {
-        id: 'vits-piper-en_US-amy-low',
-        name: 'Amy Voice (Piper TTS)',
-        size: '28MB',
-        desc: 'Lightweight & extremely responsive natural synthetic speech model.',
-        badge: 'Extremely Light',
-        badgeColor: colors.success
-      },
-      {
-        id: 'kokoro-multi-lang-v1_1',
-        name: 'Kokoro v1.1 Voice',
-        size: '344MB',
-        desc: 'Ultra-premium, studio quality, highly expressive natural voice. Supports 9+ international languages.',
-        badge: 'Studio Quality',
-        badgeColor: colors.warning
-      }
-    ];
+    const ttsModels = modelStore.models
+      .filter(m => m.type === 'tts')
+      .map(m => {
+        let badge = 'Available';
+        let badgeColor = colors.primary;
+
+        if (m.id.includes('amy')) {
+          badge = 'Fast & Light';
+          badgeColor = colors.success;
+        } else if (m.id.includes('kokoro')) {
+          badge = 'Studio Quality';
+          badgeColor = colors.warning;
+        }
+
+        return {
+          id: m.id,
+          name: m.name,
+          size: m.size || 'N/A',
+          desc: m.description || 'Offline text-to-speech voice engine.',
+          badge,
+          badgeColor
+        };
+      });
 
     return (
       <View style={styles.contentContainer}>
-        <View style={styles.stepHeader}>
-          <Text style={[styles.stepLabel, { color: colors.primary }]}>STEP 2 OF 3</Text>
-          <Text style={[styles.stepTitle, { color: colors.text }]}>Install Voice Engine</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.muted }]}>
-            Install a high-fidelity local text-to-speech speaker.
-          </Text>
-        </View>
-
         {!isDownloading ? (
-          <ScrollView 
-            style={styles.scrollView} 
+          <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.scrollContainer}
             showsVerticalScrollIndicator={false}
           >
+            <View style={styles.stepHeader}>
+              <Text style={[styles.stepLabel, { color: colors.primary }]}>STEP 2 OF 3</Text>
+              <Text style={[styles.stepTitle, { color: colors.text }]}>Choose Voice Engine</Text>
+              <Text style={[styles.stepSubtitle, { color: colors.muted }]}>
+                Select a speech synthesis engine for voice output.
+              </Text>
+            </View>
+
             {ttsModels.map(m => (
               <TouchableOpacity
                 key={m.id}
@@ -478,7 +482,7 @@ const OnboardingScreen: React.FC = observer(() => {
                   </View>
                 </View>
                 <Text style={[styles.selectorDesc, { color: colors.muted }]}>{m.desc}</Text>
-                
+
                 {selectedTtsId === m.id && (
                   <View style={styles.selectedMarker}>
                     <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
@@ -486,6 +490,14 @@ const OnboardingScreen: React.FC = observer(() => {
                 )}
               </TouchableOpacity>
             ))}
+
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: colors.primary, marginTop: 12 }]}
+              onPress={() => handleStartDownload(selectedTtsId)}
+            >
+              <Text style={[styles.actionButtonText, { color: colors.surface }]}>Download Voice Engine</Text>
+              <Ionicons name="cloud-download" size={20} color={colors.surface} />
+            </TouchableOpacity>
           </ScrollView>
         ) : (
           <View style={styles.downloadContainer}>
@@ -493,12 +505,12 @@ const OnboardingScreen: React.FC = observer(() => {
               <Ionicons name="volume-high-outline" size={48} color={colors.primary} />
             </View>
             <Text style={[styles.downloadLabel, { color: colors.text }]}>
-              Installing Voice Speaker...
+              Installing Voice Engine...
             </Text>
             <Text style={[styles.downloadStatusText, { color: colors.muted }]}>
               {statusMessage}
             </Text>
-            
+
             <View style={styles.progressSection}>
               <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
                 <View
@@ -527,16 +539,6 @@ const OnboardingScreen: React.FC = observer(() => {
             )}
           </View>
         )}
-
-        {!isDownloading && (
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary }]}
-            onPress={() => handleStartDownload(selectedTtsId)}
-          >
-            <Text style={[styles.actionButtonText, { color: colors.surface }]}>Download Voice Engine</Text>
-            <Ionicons name="cloud-download" size={20} color={colors.surface} />
-          </TouchableOpacity>
-        )}
       </View>
     );
   };
@@ -545,9 +547,9 @@ const OnboardingScreen: React.FC = observer(() => {
     <View style={styles.contentContainer}>
       <View style={styles.stepHeader}>
         <Text style={[styles.stepLabel, { color: colors.primary }]}>STEP 3 OF 3</Text>
-        <Text style={[styles.stepTitle, { color: colors.text }]}>Spinning Up Engines</Text>
+        <Text style={[styles.stepTitle, { color: colors.text }]}>Starting System</Text>
         <Text style={[styles.stepSubtitle, { color: colors.muted }]}>
-          Loading private AI brains into system RAM.
+          Loading AI models into device memory...
         </Text>
       </View>
 
@@ -582,7 +584,7 @@ const OnboardingScreen: React.FC = observer(() => {
               <Ionicons name="ellipse-outline" size={24} color={colors.muted} />
             )}
             <Text style={[styles.initLabel, { color: colors.text }]}>
-              Loading Pronunciation & Synthesis
+              Loading Voice Synthesizer
             </Text>
           </View>
           <Text style={[styles.initDetail, { color: colors.muted }]}>
@@ -600,31 +602,31 @@ const OnboardingScreen: React.FC = observer(() => {
   const renderSuccess = () => (
     <View style={styles.contentContainer}>
       <View style={[styles.successIconWrapper, { backgroundColor: `${colors.success}15` }]}>
-        <Ionicons name="ribbon-outline" size={64} color={colors.success} />
+        <Ionicons name="checkmark-circle-outline" size={64} color={colors.success} />
       </View>
 
-      <Text style={[styles.title, { color: colors.text }]}>AI Setup Complete! 🎉</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Setup Complete! 🎉</Text>
       <Text style={[styles.subtitle, { color: colors.muted }]}>
-        AI Chat is fully warmed up and active.
+        AI Chat is ready for use.
       </Text>
 
       <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.summaryTitle, { color: colors.text }]}>SYSTEM OVERVIEW</Text>
-        
+
         <View style={styles.summaryItem}>
-          <Ionicons name="logo-octocat" size={16} color={colors.primary} />
+          <Ionicons name="hardware-chip" size={16} color={colors.primary} />
           <Text style={[styles.summaryLabel, { color: colors.text }]}>
-            Brain: <Text style={{ fontFamily: 'Sora-Bold' }}>
-              {modelStore.models.find(m => m.id === selectedLlmId)?.name || 'Phi-4'}
+            AI Model: <Text style={{ fontFamily: 'Sora-Bold' }}>
+              {modelStore.models.find(m => m.id === selectedLlmId)?.name || 'TinyLlama-1.1B'}
             </Text>
           </Text>
         </View>
 
         <View style={styles.summaryItem}>
-          <Ionicons name="musical-note" size={16} color={colors.success} />
+          <Ionicons name="volume-high" size={16} color={colors.success} />
           <Text style={[styles.summaryLabel, { color: colors.text }]}>
-            Voice: <Text style={{ fontFamily: 'Sora-Bold' }}>
-              {modelStore.models.find(m => m.id === selectedTtsId)?.name || 'Kokoro Voice'}
+            Voice Engine: <Text style={{ fontFamily: 'Sora-Bold' }}>
+              {modelStore.models.find(m => m.id === selectedTtsId)?.name || 'Amy Voice'}
             </Text>
           </Text>
         </View>
@@ -641,14 +643,14 @@ const OnboardingScreen: React.FC = observer(() => {
         style={[styles.actionButton, { backgroundColor: colors.success }]}
         onPress={finalizeOnboarding}
       >
-        <Text style={[styles.actionButtonText, { color: colors.surface }]}>Enter AI Chat</Text>
-        <Ionicons name="rocket" size={20} color={colors.surface} />
+        <Text style={[styles.actionButtonText, { color: colors.surface }]}>Start AI Chat</Text>
+        <Ionicons name="arrow-forward" size={20} color={colors.surface} />
       </TouchableOpacity>
     </View>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header bar / Step Indicator */}
       <View style={styles.headerBar}>
         <View style={styles.brandRow}>
@@ -708,9 +710,13 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
+    width: '100%',
+  },
+  welcomeScrollContent: {
     padding: 24,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    flexGrow: 1,
   },
   welcomeIconWrapper: {
     width: 120,
@@ -808,7 +814,14 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     gap: 16,
-    paddingBottom: 24,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 48,
+  },
+  footerContainer: {
+    width: '100%',
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   selectorCard: {
     borderRadius: 20,

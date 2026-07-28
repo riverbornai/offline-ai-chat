@@ -182,6 +182,12 @@ class ChatSessionStore {
   updateTranscriptionMessage = (text: string, isFinal: boolean = false) => {
     if (!this.activeSession) return;
 
+    const cleaned = text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim();
+    if (!cleaned) {
+      this.clearTranscriptionMessage();
+      return;
+    }
+
     // Find existing transcription message (temporary message)
     const transcriptionMessageIndex = this.activeSession.messages.findIndex(
       m => m.author === 'user' && m.type === 'transcription'
@@ -190,7 +196,7 @@ class ChatSessionStore {
     if (transcriptionMessageIndex >= 0) {
       // Update existing transcription message
       runInAction(() => {
-        this.activeSession!.messages[transcriptionMessageIndex].text = text;
+        this.activeSession!.messages[transcriptionMessageIndex].text = cleaned;
         this.activeSession!.messages[transcriptionMessageIndex].timestamp = Date.now();
         // Do NOT convert to 'conversation' type
         this.activeSession!.updatedAt = Date.now();
@@ -199,7 +205,7 @@ class ChatSessionStore {
       // Create new transcription message
       const newMessage: ChatMessage = {
         id: generateId(),
-        text: text,
+        text: cleaned,
         author: 'user',
         timestamp: Date.now(),
         type: 'transcription', // always 'transcription'

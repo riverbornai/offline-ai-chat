@@ -45,9 +45,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     }
   };
 
-  const hasText = message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim().length > 0;
+  const hasText = message.text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim().length > 0;
 
-  if (!hasText && message.type !== 'transcription') return null;
+  if (!hasText) return null;
 
   return (
     <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>

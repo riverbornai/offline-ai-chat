@@ -61,12 +61,34 @@ class TTSService {
     return chunks.length > 0 ? chunks : [cleaned];
   }
 
-  async initialize(modelId: string = 'vits-piper-en_US-amy-low'): Promise<void> {
+  async initialize(requestedModelId?: string): Promise<void> {
+    let modelId = requestedModelId;
+
+    if (!modelId) {
+      const downloadedTts = modelStore.models.find(m => m.type === 'tts' && m.isDownloaded);
+      modelId = downloadedTts ? downloadedTts.id : 'vits-piper-en_US-amy-low';
+    }
+
+    let model = modelStore.models.find((m) => m.id === modelId);
+    if (!model || !model.isDownloaded) {
+      const fallbackTts = modelStore.models.find(m => m.type === 'tts' && m.isDownloaded);
+      if (fallbackTts) {
+        console.log(`[TTSService] Requested ${modelId} not downloaded, falling back to ${fallbackTts.id}`);
+        model = fallbackTts;
+        modelId = fallbackTts.id;
+      }
+    }
+
     if (this.isLoaded && this.activeModelId === modelId && this.engine) return;
     
     if (this.initPromise) {
       console.log('[TTSService] Waiting for existing initialization...');
-      return this.initPromise;
+      try {
+        await this.initPromise;
+      } catch (e) {
+        // Reset promise on previous failure
+      }
+      if (this.isLoaded && this.activeModelId === modelId && this.engine) return;
     }
 
     this.isLoading = true;
@@ -74,7 +96,6 @@ class TTSService {
       try {
         console.log(`[TTSService] Initializing model: ${modelId}`);
 
-        const model = modelStore.models.find((m) => m.id === modelId);
         if (!model || !model.isDownloaded) {
           throw new Error(`Model ${modelId} not found or not downloaded`);
         }
@@ -144,7 +165,7 @@ class TTSService {
           await ensureFile(originalVoices, targetVoices);
         }
 
-        if (modelTypeDir === 'piper') {
+        if (modelTypeDir === 'piper' || modelTypeDir === 'kokoro') {
           const targetLexicon = `${isolatedDir}lexicon.txt`.replace('file://', '');
           if (!(await FileSystem.getInfoAsync(`file://${targetLexicon}`)).exists) {
             await FileSystem.writeAsStringAsync(`file://${targetLexicon}`, '');
