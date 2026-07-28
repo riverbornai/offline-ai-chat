@@ -5,7 +5,6 @@ import ChatScreen from '../../components/ChatScreen';
 export default function LLMChatScreen() {
   return (
     <ChatScreen 
-      initialType="conversation"
       topic="general conversation"
     />
   );

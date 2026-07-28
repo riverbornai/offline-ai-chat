@@ -167,6 +167,17 @@ class ChatSessionStore {
     }
   };
 
+  updateMessageType = (messageId: string, type: 'conversation' | 'transcription') => {
+    if (!this.activeSession) return;
+    const idx = this.activeSession.messages.findIndex(m => m.id === messageId);
+    if (idx >= 0) {
+      runInAction(() => {
+        this.activeSession!.messages[idx].type = type;
+        this.activeSession!.updatedAt = Date.now();
+      });
+    }
+  };
+
   // Add real-time transcription message handling
   updateTranscriptionMessage = (text: string, isFinal: boolean = false) => {
     if (!this.activeSession) return;

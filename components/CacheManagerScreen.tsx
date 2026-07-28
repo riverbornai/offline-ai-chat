@@ -11,6 +11,7 @@ import {
     StyleSheet
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import {
@@ -135,12 +136,13 @@ export const CacheManagerScreen: React.FC<CacheManagerScreenProps> = ({ onBack }
   }
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
-      }
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      <ScrollView 
+        style={[styles.container, { backgroundColor: colors.background }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
+      >
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
         {onBack && (
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -257,8 +259,9 @@ export const CacheManagerScreen: React.FC<CacheManagerScreenProps> = ({ onBack }
         </View>
       )}
 
-      <View style={styles.bottomSpacer} />
-    </ScrollView>
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 

@@ -94,7 +94,7 @@ const SettingsScreen = observer(() => {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
       </View>

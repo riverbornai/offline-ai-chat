@@ -5,9 +5,15 @@ import { Platform } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const insets = useSafeAreaInsets();
+
+  const bottomPadding = insets.bottom > 0 ? insets.bottom + 10 : (Platform.OS === 'ios' ? 18 : 16);
+  const barHeight = 68 + bottomPadding;
 
   return (
     <Tabs
@@ -19,14 +25,15 @@ export default function TabLayout() {
           fontFamily: 'Sora-Bold',
           fontWeight: 'normal',
           fontSize: 11,
-          marginBottom: Platform.OS === 'ios' ? 0 : 4,
+          marginBottom: 4,
         },
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingTop: 8,
+          height: barHeight,
+          paddingTop: 10,
+          paddingBottom: bottomPadding,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.05,

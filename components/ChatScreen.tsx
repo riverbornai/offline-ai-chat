@@ -17,6 +17,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from './StoreProvider';
 
 import { ConversationPromptBuilder } from '../utils/chat';
+import { ttsService } from '../services/ttsService';
 import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
 import RealtimeChatInput from './RealtimeChatInput';
@@ -45,7 +46,15 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   const { chatSessionStore, modelStore } = useStores();
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const isSpeakingRef = useRef(false); // Bug 2 fix: ref mirror for async closures
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Keep ref in sync with state
+  const setIsSpeakingBoth = (val: boolean) => {
+    isSpeakingRef.current = val;
+    setIsSpeaking(val);
+  };
 
   useEffect(() => {
     if (sessionId) {
@@ -60,9 +69,15 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     if (scrollViewRef.current) {
       scrollViewRef.current.scrollToEnd({ animated: true });
     }
-  }, [chatSessionStore.currentMessages.length, chatSessionStore.currentMessages]);
+    // Bug 4 fix: depend on message count only — MobX arrays mutate in place
+  }, [chatSessionStore.currentMessages.length]);
 
   const handleSendMessage = async (text: string) => {
+    // Bug 2 fix: use ref (not state) to reliably check speaking in async context
+    if (isSpeakingRef.current) {
+      ttsService.stop().catch(console.warn);
+      setIsSpeakingBoth(false);
+    }
     let cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
     if (!cleaned || isLoading) return;
     if (!modelStore.context) {
@@ -79,7 +94,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     }
     const lastMsg = chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1];
     if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === cleaned && lastMsg.type === 'transcription') {
-      lastMsg.type = 'conversation';
+      // Bug 1 fix: use store method instead of direct mutation
+      chatSessionStore.updateMessageType(lastMsg.id, 'conversation');
     } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== cleaned) {
       chatSessionStore.addMessage({
         text: cleaned,
@@ -137,6 +153,14 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         if (finalResponse) {
           const finalCleanedResponse = cleanLLMResponse(finalResponse);
           chatSessionStore.updateMessage(assistantMessage.id, finalCleanedResponse);
+          // Bug 3 fix: skip TTS for errors; add .catch() so rejection doesn't go silent
+          const isErrorMsg = finalCleanedResponse.startsWith('❌');
+          if (!isErrorMsg && finalCleanedResponse.trim()) {
+            setIsSpeakingBoth(true);
+            ttsService.speak(finalCleanedResponse)
+              .catch(console.warn)
+              .finally(() => setIsSpeakingBoth(false));
+          }
         } else {
           chatSessionStore.updateMessage(assistantMessage.id, '❌ No response generated. Please try again.');
         }
@@ -191,7 +215,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -200,6 +224,12 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         <ChatHeader
           session={chatSessionStore.activeSession}
           colors={colors}
+          modelReady={!!modelStore.context}
+          isSpeaking={isSpeaking}
+          onStopTTS={() => {
+            ttsService.stop().catch(console.warn);
+            setIsSpeakingBoth(false);
+          }}
         />
         <ScrollView
           ref={scrollViewRef}

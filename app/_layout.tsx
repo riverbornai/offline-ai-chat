@@ -2,11 +2,10 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
+import * as RN from 'react-native';
 import 'react-native-get-random-values';
 import 'react-native-reanimated';
-import * as RN from 'react-native';
-import React from 'react';
 
 const OriginalText = RN.Text;
 
@@ -14,7 +13,7 @@ const SoraText = React.forwardRef((props: any, ref: any) => {
   let fontFamily = 'Sora-Medium';
   let hasWeight = false;
   const style = props.style;
-  
+
   if (style) {
     const flatStyle = RN.StyleSheet.flatten(style);
     if (flatStyle) {
@@ -26,11 +25,11 @@ const SoraText = React.forwardRef((props: any, ref: any) => {
           return <OriginalText ref={ref} {...props} />;
         }
       }
-      
+
       if (
-        flatStyle.fontWeight === 'bold' || 
-        flatStyle.fontWeight === '700' || 
-        flatStyle.fontWeight === '800' || 
+        flatStyle.fontWeight === 'bold' ||
+        flatStyle.fontWeight === '700' ||
+        flatStyle.fontWeight === '800' ||
         flatStyle.fontWeight === '900' ||
         flatStyle.fontWeight === 'semibold' ||
         flatStyle.fontWeight === '600'
@@ -38,8 +37,8 @@ const SoraText = React.forwardRef((props: any, ref: any) => {
         fontFamily = 'Sora-Bold';
         hasWeight = true;
       } else if (
-        flatStyle.fontWeight === '300' || 
-        flatStyle.fontWeight === '100' || 
+        flatStyle.fontWeight === '300' ||
+        flatStyle.fontWeight === '100' ||
         flatStyle.fontWeight === '200'
       ) {
         fontFamily = 'Sora-Light';
@@ -79,11 +78,11 @@ try {
 }
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { StoreProvider } from '../components/StoreProvider';
-import { quickSetup } from '../utils/modelSetup';
-import { modelStore } from '../stores/ModelStore';
 import { observer } from 'mobx-react';
 import OnboardingScreen from '../components/OnboardingScreen';
+import { StoreProvider } from '../components/StoreProvider';
+import { modelStore } from '../stores/ModelStore';
+import { quickSetup } from '../utils/modelSetup';
 
 import { Colors } from '../constants/Colors';
 
