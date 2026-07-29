@@ -47,8 +47,14 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const isSpeakingRef = useRef(false); // Bug 2 fix: ref mirror for async closures
+  const isSpeakingRef = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Streaming TTS refs (same pattern as TalkScreen)
+  const ttsRef = useRef('');
+  const ttsQueue = useRef<string[]>([]);
+  const ttsSpeakingRef = useRef(false);
+  const generationActiveRef = useRef(false);
 
   // Keep ref in sync with state
   const setIsSpeakingBoth = (val: boolean) => {
@@ -72,10 +78,35 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     // Bug 4 fix: depend on message count only — MobX arrays mutate in place
   }, [chatSessionStore.currentMessages.length]);
 
+  // Speak sentences from the queue one by one (streaming TTS)
+  const speakNextSentence = async () => {
+    if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
+      const sentence = ttsQueue.current.shift()!;
+      ttsSpeakingRef.current = true;
+      setIsSpeakingBoth(true);
+      try {
+        await ttsService.speak(sentence);
+      } catch (err) {
+        console.warn('[ChatScreen] TTS chunk error:', err);
+      } finally {
+        ttsSpeakingRef.current = false;
+        if (ttsQueue.current.length > 0) {
+          speakNextSentence();
+        } else if (!generationActiveRef.current) {
+          // Generation already finished and queue is now empty
+          setIsSpeakingBoth(false);
+        }
+      }
+    }
+  };
+
   const handleSendMessage = async (text: string) => {
-    // Bug 2 fix: use ref (not state) to reliably check speaking in async context
-    if (isSpeakingRef.current) {
-      ttsService.stop().catch(console.warn);
+    // Stop any in-progress TTS before new message
+    if (isSpeakingRef.current || ttsSpeakingRef.current) {
+      generationActiveRef.current = false;
+      ttsQueue.current = [];
+      ttsSpeakingRef.current = false;
+      await ttsService.stop().catch(console.warn);
       setIsSpeakingBoth(false);
     }
     let cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
@@ -94,7 +125,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     }
     const lastMsg = chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1];
     if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === cleaned && lastMsg.type === 'transcription') {
-      // Bug 1 fix: use store method instead of direct mutation
       chatSessionStore.updateMessageType(lastMsg.id, 'conversation');
     } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== cleaned) {
       chatSessionStore.addMessage({
@@ -105,6 +135,13 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     }
     setIsLoading(true);
     chatSessionStore.setIsGenerating(true);
+
+    // Reset streaming TTS state
+    ttsRef.current = '';
+    ttsQueue.current = [];
+    ttsSpeakingRef.current = false;
+    generationActiveRef.current = true;
+
     let accumulatedResponse = '';
     let tokensReceived = 0;
     try {
@@ -122,7 +159,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         type: 'conversation',
       });
 
-      const completionPromise = modelStore.generateCompletion(
+      await modelStore.generateCompletion(
         prompt,
         {
           temperature: 0.7,
@@ -130,42 +167,65 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           stop: ['\nUser:', '\nAssistant:'],
         },
         (token: string) => {
+          if (!generationActiveRef.current) return;
           tokensReceived++;
           if (assistantMessage) {
             accumulatedResponse += token;
             const cleanedResponse = cleanLLMResponse(accumulatedResponse);
             chatSessionStore.updateMessage(assistantMessage.id, cleanedResponse);
           }
+          // ── Streaming TTS: extract complete sentences as tokens arrive ──
+          ttsRef.current += token;
+          const sentenceRegex = /([^.?!]+[.?!]+["')\]]*\s*)/g;
+          let match;
+          let lastIndex = 0;
+          while ((match = sentenceRegex.exec(ttsRef.current)) !== null) {
+            const sentence = match[0].trim();
+            if (sentence && !/^[\s.,!?;:]+$/.test(sentence)) {
+              ttsQueue.current.push(sentence);
+              lastIndex = sentenceRegex.lastIndex;
+            }
+          }
+          if (lastIndex > 0) {
+            ttsRef.current = ttsRef.current.slice(lastIndex);
+            speakNextSentence();
+          }
         }
       );
-      const result = await completionPromise as string;
+
+      // Flush any remaining text after generation finishes
+      const remaining = ttsRef.current.trim();
+      if (remaining && !/^[\s.,!?;:]+$/.test(remaining)) {
+        ttsQueue.current.push(remaining);
+      }
+      ttsRef.current = '';
+
+      // Finalize the message text
       if (assistantMessage) {
-        let finalResponse = result || accumulatedResponse;
+        let finalResponse = accumulatedResponse;
         const stopSequences = ['\nUser:', '\nAssistant:'];
         let minIdx = finalResponse.length;
         for (const stop of stopSequences) {
           const idx = finalResponse.indexOf(stop);
           if (idx !== -1 && idx < minIdx) minIdx = idx;
         }
-        if (minIdx !== finalResponse.length) {
-          finalResponse = finalResponse.slice(0, minIdx);
-        }
+        if (minIdx !== finalResponse.length) finalResponse = finalResponse.slice(0, minIdx);
         if (finalResponse) {
-          const finalCleanedResponse = cleanLLMResponse(finalResponse);
-          chatSessionStore.updateMessage(assistantMessage.id, finalCleanedResponse);
-          // Bug 3 fix: skip TTS for errors; add .catch() so rejection doesn't go silent
-          const isErrorMsg = finalCleanedResponse.startsWith('❌');
-          if (!isErrorMsg && finalCleanedResponse.trim()) {
-            setIsSpeakingBoth(true);
-            ttsService.speak(finalCleanedResponse)
-              .catch(console.warn)
-              .finally(() => setIsSpeakingBoth(false));
-          }
+          chatSessionStore.updateMessage(assistantMessage.id, cleanLLMResponse(finalResponse));
         } else {
           chatSessionStore.updateMessage(assistantMessage.id, '❌ No response generated. Please try again.');
         }
       }
+
+      // Kick off TTS for any remaining queued sentences
+      generationActiveRef.current = false;
+      if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
+        speakNextSentence();
+      } else if (!ttsSpeakingRef.current) {
+        setIsSpeakingBoth(false);
+      }
     } catch (error) {
+      generationActiveRef.current = false;
       chatSessionStore.addMessage({
         text: `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}. Tokens received: ${tokensReceived}. Try again.`,
         author: 'assistant',
@@ -267,8 +327,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    paddingVertical: 20,
-    paddingHorizontal: 4,
+    paddingTop: 16,
+    paddingBottom: 24,
+    paddingHorizontal: 0,
   },
   welcomeCard: {
     margin: 20,

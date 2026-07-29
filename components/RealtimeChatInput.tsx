@@ -232,13 +232,17 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
   const hasText = textInput.trim().length > 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+      {/* Top divider line */}
+      <View style={[styles.topDivider, { backgroundColor: colors.border }]} />
+
+      {/* Status banner */}
       {(isRecording || isTranscribing || isLoading) && (
-        <View style={styles.statusRow}>
+        <View style={[styles.statusRow, { backgroundColor: isRecording ? `${colors.error}12` : `${colors.primary}10` }]}>
           {isRecording ? (
             <View style={styles.statusInner}>
               <View style={[styles.pulseDot, { backgroundColor: colors.error }]} />
-              <Text style={[styles.statusText, { color: colors.error }]}>Listening...</Text>
+              <Text style={[styles.statusText, { color: colors.error }]}>Listening — tap ■ to stop</Text>
             </View>
           ) : isTranscribing ? (
             <View style={styles.statusInner}>
@@ -248,23 +252,29 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
           ) : (
             <View style={styles.statusInner}>
               <ActivityIndicator color={colors.primary} size="small" />
-              <Text style={[styles.statusText, { color: colors.primary }]}>AI is thinking...</Text>
+              <Text style={[styles.statusText, { color: colors.primary }]}>AI is composing...</Text>
             </View>
           )}
         </View>
       )}
 
+      {/* Input row */}
       <View style={styles.inputRow}>
+        {/* Pill-shaped text box */}
         <View
           style={[
             styles.textInputWrapper,
-            { backgroundColor: colors.background ?? '#f8faf7', borderColor: colors.border },
+            {
+              backgroundColor: colors.surfaceMuted ?? colors.background ?? '#f4f7f4',
+              borderColor: isRecording ? colors.error : colors.border,
+              shadowColor: colors.shadow ?? '#000',
+            },
           ]}
         >
           <TextInput
             ref={textInputRef}
             style={[styles.textInput, { color: colors.text }]}
-            placeholder={isRecording ? 'Listening...' : (placeholder ?? 'Type a message...')}
+            placeholder={isRecording ? 'Listening…' : (placeholder ?? 'Type a message…')}
             placeholderTextColor={colors.muted}
             value={isRecording ? transcription : textInput}
             onChangeText={isRecording ? undefined : setTextInput}
@@ -276,21 +286,29 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
           />
         </View>
 
+        {/* Send button (visible when text typed) */}
         {hasText && !isRecording && (
           <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.primary, shadowColor: colors.primary }]}
+            style={[
+              styles.actionButton,
+              styles.sendButton,
+              { backgroundColor: colors.primary, shadowColor: colors.primary },
+              isBusy && styles.disabledButton,
+            ]}
             onPress={handleSendText}
             disabled={isBusy}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
           >
-            <Ionicons name="send" size={22} color={'#fff'} />
+            <Ionicons name="arrow-up" size={22} color={colors.onPrimary ?? '#fff'} />
           </TouchableOpacity>
         )}
 
+        {/* Mic / Stop button */}
         {(!hasText || isRecording) && (
           <TouchableOpacity
             style={[
               styles.actionButton,
+              styles.micButton,
               {
                 backgroundColor: isRecording ? colors.error : colors.primary,
                 shadowColor: isRecording ? colors.error : colors.primary,
@@ -299,9 +317,13 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
             ]}
             onPress={isRecording ? stopRecording : startRecording}
             disabled={isBusy && !isRecording}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
           >
-            <Ionicons name={isRecording ? 'stop' : 'mic'} size={24} color={'#fff'} />
+            <Ionicons
+              name={isRecording ? 'stop' : 'mic'}
+              size={isRecording ? 20 : 22}
+              color={isRecording ? '#fff' : (colors.onPrimary ?? '#fff')}
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -311,19 +333,27 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
-    borderTopWidth: 1,
+    paddingHorizontal: 14,
+    paddingTop: 0,
+    paddingBottom: Platform.OS === 'ios' ? 6 : 12,
+    // Elevation handled by shadow on wrapper
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  topDivider: {
+    height: 1,
+    marginBottom: 10,
+    opacity: 0.6,
   },
   statusRow: {
-    paddingHorizontal: 4,
-    paddingBottom: 8,
+    marginHorizontal: 2,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 12,
   },
   statusInner: {
     flexDirection: 'row',
@@ -331,28 +361,35 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   statusText: {
-    fontSize: 13,
-    fontFamily: 'Sora-Bold',
+    fontSize: 12,
+    fontFamily: 'Sora-SemiBold',
+    letterSpacing: 0.2,
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 10,
+    paddingBottom: 2,
   },
   textInputWrapper: {
     flex: 1,
-    minHeight: 48,
-    maxHeight: 120,
-    borderRadius: 24,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    minHeight: 52,
+    maxHeight: 124,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    paddingHorizontal: 20,
+    paddingVertical: Platform.OS === 'ios' ? 13 : 9,
     justifyContent: 'center',
+    // Inner glow / depth
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   textInput: {
     fontSize: 15,
@@ -364,18 +401,25 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   actionButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  sendButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  micButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   disabledButton: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
 });
 

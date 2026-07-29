@@ -91,6 +91,7 @@ export const Colors = {
     warning: warning,
     error: error,
     disabled: riverMist,
+    onPrimary: white,
   },
   dark: {
     text: frost,
@@ -113,5 +114,6 @@ export const Colors = {
     warning: lime300,
     error: error,
     disabled: forest300,
+    onPrimary: midnight,
   },
 };

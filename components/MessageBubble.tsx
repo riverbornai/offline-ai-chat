@@ -1,9 +1,14 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ChatMessage } from '../stores/ChatSessionStore';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { ttsService } from '../services/ttsService';
-import { useState } from 'react';
+import { ChatMessage } from '../stores/ChatSessionStore';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -21,6 +26,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onLongPress,
 }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
+
   const formatTime = (timestamp?: number) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -31,78 +37,88 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     });
   };
 
-  const getTypeIcon = (type?: string) => {
-    switch (type) {
-      case 'conversation': return '💬';
-      case 'translation': return '🔄';
-      case 'grammar': return '📝';
-      case 'vocabulary': return '📖';
-      case 'pronunciation': return '🗣️';
-      case 'cultural': return '🌍';
-      case 'roleplay': return '🎭';
-      case 'transcription': return '🎤';
-      default: return '';
-    }
+  const getTypeLabel = (type?: string): { icon: string; label: string } | null => {
+    // Only show a badge for voice-transcribed messages
+    if (type === 'transcription') return { icon: '🎤', label: 'Voice' };
+    return null;
   };
 
-  const hasText = message.text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim().length > 0;
+  const cleanText = message.text
+    .replace(/\[BLANK_AUDIO\]/gi, '')
+    .replace(/\(BLANK_AUDIO\)/gi, '')
+    .trim();
 
-  if (!hasText) return null;
+  if (!cleanText) return null;
+
+  const typeInfo = getTypeLabel(message.type);
+  const isTranscription = message.type === 'transcription';
 
   return (
-    <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
-      <TouchableOpacity
-        style={[
-          styles.bubble,
-          isUser ? styles.userBubble : styles.assistantBubble,
-          {
-            backgroundColor: isUser ? colors.primary : colors.surface,
-            borderColor: isUser ? colors.primary : colors.border,
-            borderWidth: isUser ? 0 : 1,
-            shadowColor: isUser ? colors.primary : '#000',
-          },
-          message.type === 'transcription' && styles.transcriptionBubble
-        ]}
-        onPress={onPress}
-        onLongPress={onLongPress}
-        disabled={!onPress && !onLongPress}
-        activeOpacity={0.8}
-      >
-        {message.type && (message.type === 'transcription' || !isUser) && (
-          <View style={[styles.typeIndicator, { backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : `${colors.primary}10` }]}>
-            <Text style={styles.typeIcon}>{getTypeIcon(message.type)}</Text>
+    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}>
+      {/* AI avatar */}
+      {!isUser && (
+        <View style={[styles.avatar, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}30` }]}>
+          <Ionicons name="sparkles" size={14} color={colors.primary} />
+        </View>
+      )}
+
+      <View style={[styles.bubbleColumn, isUser ? styles.bubbleColumnUser : styles.bubbleColumnAssistant]}>
+        {/* Type badge — shown for special types */}
+        {typeInfo && (
+          <View
+            style={[
+              styles.typeBadge,
+              isUser ? styles.typeBadgeUser : styles.typeBadgeAssistant,
+              { backgroundColor: isUser ? 'rgba(255,255,255,0.22)' : `${colors.primary}14` },
+            ]}
+          >
+            <Text style={styles.typeBadgeIcon}>{typeInfo.icon}</Text>
+            <Text style={[styles.typeBadgeLabel, { color: isUser ? (colors.onPrimary ?? '#fff') : colors.primary }]}>
+              {typeInfo.label}
+            </Text>
           </View>
         )}
-        
-        <Text
+
+        {/* Bubble */}
+        <TouchableOpacity
           style={[
-            styles.messageText,
+            styles.bubble,
+            isUser ? styles.userBubble : styles.assistantBubble,
             {
-              color: isUser ? colors.surface : colors.text,
-              fontStyle: message.type === 'transcription' ? 'italic' : 'normal',
-              opacity: message.type === 'transcription' ? 0.7 : 1,
+              backgroundColor: isUser ? colors.primary : colors.surface,
+              borderColor: isUser ? 'transparent' : colors.border,
+              shadowColor: isUser ? colors.primary : (colors.shadow ?? '#000'),
             },
+            isTranscription && [styles.transcriptionBubble, { borderColor: colors.muted }],
           ]}
+          onPress={onPress}
+          onLongPress={onLongPress}
+          disabled={!onPress && !onLongPress}
+          activeOpacity={0.82}
         >
-          {message.text.replace(/\[BLANK_AUDIO\]/gi, '').trim()}
-          {message.type === 'transcription' && '...'}
-        </Text>
-        
-        <View style={styles.footer}>
           <Text
             style={[
-              styles.timestamp,
+              styles.messageText,
               {
-                color: isUser ? colors.surface : colors.muted,
-                opacity: 0.7,
+                color: isUser ? (colors.onPrimary ?? '#fff') : colors.text,
+                fontStyle: isTranscription ? 'italic' : 'normal',
+                opacity: isTranscription ? 0.75 : 1,
               },
             ]}
           >
+            {cleanText}
+            {isTranscription ? '…' : ''}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Footer: timestamp + speaker */}
+        <View style={[styles.footer, isUser ? styles.footerUser : styles.footerAssistant]}>
+          <Text style={[styles.timestamp, { color: colors.muted }]}>
             {formatTime(message.timestamp)}
           </Text>
-          
-          {!isUser && message.text.length > 0 && message.type !== 'transcription' && (
-            <TouchableOpacity 
+
+          {!isUser && cleanText.length > 0 && !isTranscription && (
+            <TouchableOpacity
               onPress={async () => {
                 setIsSpeaking(true);
                 try {
@@ -111,85 +127,159 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   setIsSpeaking(false);
                 }
               }}
-              style={styles.speakerButton}
+              style={[styles.speakerButton, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}20` }]}
+              activeOpacity={0.7}
             >
               {isSpeaking ? (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color={colors.primary} style={styles.speakerSpinner} />
               ) : (
-                <Ionicons name="volume-medium" size={18} color={colors.primary} />
+                <Ionicons name="volume-medium-outline" size={15} color={colors.primary} />
               )}
             </TouchableOpacity>
           )}
         </View>
-      </TouchableOpacity>
+      </View>
+
+      {/* User avatar spacer (keeps layout symmetric) */}
+      {isUser && <View style={styles.avatarSpacer} />}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginVertical: 6,
-    paddingHorizontal: 12,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    marginVertical: 5,
+    paddingHorizontal: 14,
+    gap: 8,
   },
-  userContainer: {
+  rowUser: {
+    justifyContent: 'flex-end',
+  },
+  rowAssistant: {
+    justifyContent: 'flex-start',
+  },
+
+  // Avatar
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20, // aligns with footer
+    flexShrink: 0,
+  },
+  avatarSpacer: {
+    width: 32,
+    flexShrink: 0,
+  },
+
+  // Column holding badge + bubble + footer
+  bubbleColumn: {
+    maxWidth: '78%',
+    gap: 4,
+  },
+  bubbleColumnUser: {
     alignItems: 'flex-end',
   },
-  assistantContainer: {
+  bubbleColumnAssistant: {
     alignItems: 'flex-start',
   },
-  bubble: {
-    maxWidth: '85%',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+
+  // Type badge
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 20,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  typeBadgeUser: {
+    alignSelf: 'flex-end',
+  },
+  typeBadgeAssistant: {
+    alignSelf: 'flex-start',
+  },
+  typeBadgeIcon: {
+    fontSize: 13,
+  },
+  typeBadgeLabel: {
+    fontSize: 11,
+    fontFamily: 'Sora-SemiBold',
+    letterSpacing: 0.3,
+  },
+
+  // Bubble
+  bubble: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 22,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
     elevation: 4,
   },
   userBubble: {
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
   },
   assistantBubble: {
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
   },
   transcriptionBubble: {
     borderStyle: 'dashed',
-    borderWidth: 1,
+    borderWidth: 1.5,
     backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  typeIndicator: {
-    marginBottom: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  typeIcon: {
-    fontSize: 12,
-  },
+
+  // Text
   messageText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 23,
     fontFamily: 'Sora-Medium',
   },
+
+  // Footer
   footer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+    paddingHorizontal: 2,
+  },
+  footerUser: {
     justifyContent: 'flex-end',
-    marginTop: 4,
+    flexDirection: 'row-reverse',
+  },
+  footerAssistant: {
+    justifyContent: 'flex-start',
   },
   timestamp: {
     fontSize: 10,
-    fontFamily: 'Sora-Bold',
-    textTransform: 'uppercase',
+    fontFamily: 'Sora-Regular',
+    letterSpacing: 0.2,
+    opacity: 0.7,
   },
+
+  // Speaker button
   speakerButton: {
-    marginLeft: 12,
-    padding: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  speakerSpinner: {
+    transform: [{ scale: 0.7 }],
   },
 });
 
 export default MessageBubble;
- 
