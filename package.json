@@ -14,10 +14,11 @@
     "cache:clear-models": "node ./scripts/cache-cli.js clear-models",
     "cache:clear-downloads": "node ./scripts/cache-cli.js clear-downloads",
     "setup": "node ./scripts/setup-speech-to-text.js",
-    "setup-model": "node ./scripts/setup-model.js"
+    "setup-model": "node ./scripts/setup-model.js",
+    "postinstall": "patch-package"
   },
   "dependencies": {
-    "@dr.pogodin/react-native-fs": "^2.38.2",
+    "@dr.pogodin/react-native-fs": "^2.39.2",
     "@expo/vector-icons": "^14.1.0",
     "@kesha-antonov/react-native-background-downloader": "^3.2.6",
     "@pocketpalai/llama.rn": "^0.6.0-rc.8.1",
@@ -75,6 +76,7 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "patch-package": "^8.0.1",
     "react-native-gradle-plugin": "^0.71.19",
     "typescript": "~5.8.3"
   },
