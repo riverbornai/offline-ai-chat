@@ -71,12 +71,22 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   }, [sessionId, topic]);
 
 
+  // Scroll when new messages are added
   useEffect(() => {
     if (scrollViewRef.current) {
       scrollViewRef.current.scrollToEnd({ animated: true });
     }
-    // Bug 4 fix: depend on message count only — MobX arrays mutate in place
   }, [chatSessionStore.currentMessages.length]);
+
+  // Scroll while AI is streaming tokens into the last message
+  const lastMessageText = chatSessionStore.currentMessages.length > 0
+    ? chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1].text
+    : '';
+  useEffect(() => {
+    if (isLoading && scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: false });
+    }
+  }, [isLoading, lastMessageText]);
 
   // Speak sentences from the queue one by one (streaming TTS)
   const speakNextSentence = async () => {

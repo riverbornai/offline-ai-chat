@@ -8,4 +8,4 @@ module.exports = {
       packageName: 'com.anonymous.aichat'
     }
   }
-}; 
+};
