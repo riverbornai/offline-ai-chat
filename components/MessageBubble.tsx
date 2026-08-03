@@ -140,8 +140,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       </View>
 
-      {/* User avatar spacer (keeps layout symmetric) */}
-      {isUser && <View style={styles.avatarSpacer} />}
     </View>
   );
 };
@@ -151,14 +149,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     marginVertical: 5,
-    paddingHorizontal: 14,
     gap: 8,
   },
   rowUser: {
     justifyContent: 'flex-end',
+    paddingLeft: 48,
+    paddingRight: 14,
   },
   rowAssistant: {
     justifyContent: 'flex-start',
+    paddingLeft: 14,
+    paddingRight: 48,
   },
 
   // Avatar
@@ -172,10 +173,7 @@ const styles = StyleSheet.create({
     marginBottom: 20, // aligns with footer
     flexShrink: 0,
   },
-  avatarSpacer: {
-    width: 32,
-    flexShrink: 0,
-  },
+
 
   // Column holding badge + bubble + footer
   bubbleColumn: {

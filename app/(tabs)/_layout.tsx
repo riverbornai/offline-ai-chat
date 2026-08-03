@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
+import { HapticTab } from '../../components/HapticTab';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
@@ -19,6 +19,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarButton: HapticTab,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: {
@@ -29,8 +30,7 @@ export default function TabLayout() {
         },
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
+          borderTopWidth: 0,
           height: barHeight,
           paddingTop: 10,
           paddingBottom: bottomPadding,
@@ -39,6 +39,10 @@ export default function TabLayout() {
           shadowOpacity: 0.05,
           shadowRadius: 10,
           elevation: 20,
+        },
+        tabBarItemStyle: {
+          borderWidth: 0,
+          outline: 'none',
         },
       }}>
       <Tabs.Screen

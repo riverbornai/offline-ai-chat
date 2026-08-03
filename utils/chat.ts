@@ -1,40 +1,26 @@
 import { ChatMessage } from '../stores/ChatSessionStore';
 
-export interface ConversationContext {
-  targetLanguage?: string;
-  nativeLanguage?: string;
-  learningLevel?: 'beginner' | 'intermediate' | 'advanced';
-  topic?: string;
-}
-
 export class ConversationPromptBuilder {
-  private context: ConversationContext;
+  private systemPrompt: string;
 
-  constructor(context: ConversationContext) {
-    this.context = context;
+  constructor(systemPrompt?: string) {
+    this.systemPrompt = systemPrompt || 'You are a helpful and engaging AI assistant. Provide concise, natural, and helpful answers to user questions. Maintain a friendly and conversational tone.';
   }
 
   buildPrompt(userInput: string, conversationHistory: ChatMessage[] = []): string {
-    const baseContext = this.getBaseContext();
-    return this.buildConversationPrompt(userInput, baseContext, conversationHistory);
-  }
-
-  private getBaseContext(): string {
-    return `You are a helpful and engaging AI voice assistant. Provide concise, natural, and helpful answers to user questions. Maintain a friendly and conversational tone.`;
+    return this.buildConversationPrompt(userInput, conversationHistory);
   }
 
   private buildConversationPrompt(
     userInput: string,
-    baseContext: string,
     conversationHistory: ChatMessage[] = []
   ): string {
-
     const historyContext =
       conversationHistory.length > 0
         ? `\nConversation so far:\n${MessageFormatter.formatForContext(conversationHistory.slice(-3), 800)}\n`
         : '';
 
-    return `${baseContext}
+    return `${this.systemPrompt}
 
 ### Instructions:
 - Be a natural and engaging conversation partner
@@ -81,9 +67,4 @@ export class MessageFormatter {
   }
 }
 
-export const createConversationPromptBuilder = (context: ConversationContext) =>
-  new ConversationPromptBuilder(context);
-
 export const messageFormatter = MessageFormatter;
-
-

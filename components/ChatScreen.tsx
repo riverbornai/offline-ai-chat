@@ -155,13 +155,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     let accumulatedResponse = '';
     let tokensReceived = 0;
     try {
-      const conversationContext = {
-        targetLanguage: chatSessionStore.activeSession?.targetLanguage || chatSessionStore.settings.targetLanguage,
-        nativeLanguage: chatSessionStore.activeSession?.nativeLanguage || chatSessionStore.settings.nativeLanguage,
-        learningLevel: chatSessionStore.settings.learningLevel,
-        topic: topic || chatSessionStore.activeSession?.title || '',
-      };
-      const promptBuilder = new ConversationPromptBuilder(conversationContext);
+      const promptBuilder = new ConversationPromptBuilder(
+        chatSessionStore.settings.systemPrompt
+      );
       const prompt = promptBuilder.buildPrompt(cleaned, chatSessionStore.currentMessages);
       const assistantMessage = chatSessionStore.addMessage({
         text: '',
@@ -316,7 +312,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
               isUser={message.author === 'user'}
             />
           ))}
-          {isLoading && renderLoadingIndicator()}
+          {isLoading && chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1]?.author !== 'assistant' && renderLoadingIndicator()}
         </ScrollView>
         <RealtimeChatInput
           onSendMessage={handleSendMessage}

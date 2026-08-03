@@ -17,7 +17,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from '../components/StoreProvider';
 import { ttsService } from '../services/ttsService';
 import { whisperService } from '../services/whisperService';
-import { ConversationPromptBuilder, ConversationContext } from '../utils/chat';
+import { ConversationPromptBuilder } from '../utils/chat';
 
 const { width, height } = Dimensions.get('window');
 
@@ -230,13 +230,9 @@ const TalkScreen: React.FC = observer(() => {
 
     chatSessionStore.addMessage({ text: cleaned, author: 'user', type: 'conversation' });
     try {
-      const conversationContext: ConversationContext = {
-        targetLanguage: chatSessionStore.activeSession?.targetLanguage || chatSessionStore.settings.targetLanguage || 'English',
-        nativeLanguage: chatSessionStore.activeSession?.nativeLanguage || chatSessionStore.settings.nativeLanguage || 'English',
-        learningLevel: chatSessionStore.settings.learningLevel || 'beginner',
-        topic: chatSessionStore.activeSession?.title || 'general conversation',
-      };
-      const promptBuilder = new ConversationPromptBuilder(conversationContext);
+      const promptBuilder = new ConversationPromptBuilder(
+        chatSessionStore.settings.systemPrompt
+      );
       const prompt = promptBuilder.buildPrompt(cleaned, chatSessionStore.currentMessages);
       let assistantMessage = chatSessionStore.addMessage({ text: '', author: 'assistant', type: 'conversation' });
       if (!assistantMessage) {

@@ -16,41 +16,28 @@ export interface ChatMessage {
   text: string;
   author: 'user' | 'assistant';
   timestamp: number;
-  language?: string;
-  type?: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay' | 'transcription';
+  type?: 'conversation' | 'transcription';
 }
 
 export interface ChatSession {
   id: string;
   title: string;
   messages: ChatMessage[];
-  targetLanguage: string;
-  nativeLanguage: string;
   createdAt: number;
   updatedAt: number;
-  type: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay';
 }
 
-export interface LanguageLearningSettings {
-  targetLanguage: string;
-  nativeLanguage: string;
-  learningLevel: 'beginner' | 'intermediate' | 'advanced';
-  focusAreas: string[];
-  correctionPreference: 'always' | 'sometimes' | 'never';
+export interface AppSettings {
+  systemPrompt: string;
 }
 
 class ChatSessionStore {
   sessions: ChatSession[] = [];
   activeSessionId: string | null = null;
   isGenerating: boolean = false;
-  
-  // Language learning settings
-  settings: LanguageLearningSettings = {
-    targetLanguage: 'English',
-    nativeLanguage: 'English',
-    learningLevel: 'beginner',
-    focusAreas: ['conversation', 'grammar'],
-    correctionPreference: 'sometimes'
+
+  settings: AppSettings = {
+    systemPrompt: 'You are a helpful and engaging AI assistant. Provide concise, natural, and helpful answers.',
   };
 
   constructor() {
@@ -75,15 +62,7 @@ class ChatSessionStore {
     return this.activeSession?.messages || [];
   }
 
-  get sessionsByType(): Record<string, ChatSession[]> {
-    return this.sessions.reduce((acc, session) => {
-      if (!acc[session.type]) {
-        acc[session.type] = [];
-      }
-      acc[session.type].push(session);
-      return acc;
-    }, {} as Record<string, ChatSession[]>);
-  }
+
 
   setActiveSession = (sessionId: string | null) => {
     runInAction(() => {
@@ -91,21 +70,13 @@ class ChatSessionStore {
     });
   };
 
-  createSession = (
-    title: string,
-    type: 'conversation' | 'translation' | 'grammar' | 'vocabulary' | 'pronunciation' | 'cultural' | 'roleplay',
-    targetLanguage?: string,
-    nativeLanguage?: string
-  ): ChatSession => {
+  createSession = (title: string): ChatSession => {
     const newSession: ChatSession = {
       id: generateId(),
       title,
       messages: [],
-      targetLanguage: targetLanguage || this.settings.targetLanguage,
-      nativeLanguage: nativeLanguage || this.settings.nativeLanguage,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      type
     };
 
     runInAction(() => {
@@ -255,8 +226,7 @@ class ChatSessionStore {
     });
   };
 
-  // Language learning specific methods
-  updateSettings = (settings: Partial<LanguageLearningSettings>) => {
+  updateSettings = (settings: Partial<AppSettings>) => {
     runInAction(() => {
       this.settings = { ...this.settings, ...settings };
     });
@@ -281,23 +251,8 @@ class ChatSessionStore {
   };
 
   createConversationSession = (topic?: string) => {
-    const title = topic ? `Conversation: ${topic}` : 'New Conversation';
-    return this.createSession(title, 'conversation');
-  };
-
-  createTranslationSession = (sourceLanguage?: string, targetLanguage?: string) => {
-    const title = `Translation: ${sourceLanguage || this.settings.nativeLanguage} → ${targetLanguage || this.settings.targetLanguage}`;
-    return this.createSession(title, 'translation', targetLanguage, sourceLanguage);
-  };
-
-  createGrammarSession = () => {
-    const title = `Grammar Practice: ${this.settings.targetLanguage}`;
-    return this.createSession(title, 'grammar');
-  };
-
-  createVocabularySession = (topic?: string) => {
-    const title = topic ? `Vocabulary: ${topic}` : 'Vocabulary Practice';
-    return this.createSession(title, 'vocabulary');
+    const title = topic ? `Chat: ${topic}` : 'New Chat';
+    return this.createSession(title);
   };
 
   // Helper methods for message formatting
@@ -313,34 +268,16 @@ class ChatSessionStore {
     return this.activeSession.messages.slice(-limit);
   };
 
-  // Statistics and analytics
+  // Statistics
   getSessionStats = () => {
     const totalSessions = this.sessions.length;
     const totalMessages = this.sessions.reduce((sum, session) => sum + session.messages.length, 0);
-    const sessionsByType = this.sessionsByType;
     
     return {
       totalSessions,
       totalMessages,
-      sessionsByType: Object.keys(sessionsByType).map(type => ({
-        type,
-        count: sessionsByType[type].length
-      })),
       mostRecentSession: this.sessions.sort((a, b) => b.updatedAt - a.updatedAt)[0]
     };
-  };
-
-  getLanguageStats = () => {
-    const languages = new Set(this.sessions.map(s => s.targetLanguage));
-    const languageStats = Array.from(languages).map(lang => ({
-      language: lang,
-      sessions: this.sessions.filter(s => s.targetLanguage === lang).length,
-      messages: this.sessions
-        .filter(s => s.targetLanguage === lang)
-        .reduce((sum, session) => sum + session.messages.length, 0)
-    }));
-
-    return languageStats.sort((a, b) => b.sessions - a.sessions);
   };
 }
 

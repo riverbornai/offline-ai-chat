@@ -100,14 +100,6 @@ const SettingsScreen = observer(() => {
       </View>
       <ScrollView style={styles.content}>
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>PREFERENCES</Text>
-          <SettingItem icon="language" label="Target Language" value="English" />
-          <SettingItem icon="person" label="Native Language" value="Spanish" />
-          <SettingItem icon="trending-up" label="Learning Level" value="Intermediate" />
-          <SettingItem icon="checkmark-circle" label="Corrections" value="Direct" />
-        </View>
-
-        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>LOCAL AI & SPEECH</Text>
           <SettingItem 
             icon="chatbubbles" 
