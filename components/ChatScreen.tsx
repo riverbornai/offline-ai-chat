@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -8,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,8 +18,8 @@ import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from './StoreProvider';
 
-import { ConversationPromptBuilder } from '../utils/chat';
 import { ttsService } from '../services/ttsService';
+import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
 import RealtimeChatInput from './RealtimeChatInput';
@@ -41,6 +43,7 @@ interface ChatScreenProps {
 }
 
 const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) => {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { chatSessionStore, modelStore } = useStores();
@@ -158,7 +161,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       const promptBuilder = new ConversationPromptBuilder(
         chatSessionStore.settings.systemPrompt
       );
-      const prompt = promptBuilder.buildPrompt(cleaned, chatSessionStore.currentMessages);
+      const messages = promptBuilder.buildMessages(cleaned, chatSessionStore.currentMessages);
       const assistantMessage = chatSessionStore.addMessage({
         text: '',
         author: 'assistant',
@@ -166,10 +169,14 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       });
 
       await modelStore.generateCompletion(
-        prompt,
+        messages,
         {
           temperature: 0.7,
-          max_tokens: 512,
+          // 256 tokens is plenty for a chat reply and keeps on-device
+          // latency reasonable; the model's own end-of-turn token (applied
+          // via the chat template) is what actually stops generation early
+          // for shorter answers.
+          max_tokens: 256,
           stop: ['\nUser:', '\nAssistant:'],
         },
         (token: string) => {
@@ -263,10 +270,14 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
               : 'I\'m ready to help! What would you like to talk about today?'}
         </Text>
         {!hasModel && (
-          <View style={styles.actionPrompt}>
+          <TouchableOpacity
+            style={styles.actionPrompt}
+            onPress={() => router.push('/(tabs)/models')}
+            activeOpacity={0.7}
+          >
             <Ionicons name="arrow-forward-circle" size={20} color={colors.primary} />
             <Text style={[styles.actionText, { color: colors.primary }]}>Go to Models Tab</Text>
-          </View>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -319,6 +330,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           isLoading={isLoading}
           colors={colors}
           placeholder={modelStore.context ? "Say something..." : "Load a model first"}
+          isModelLoaded={!!modelStore.context}
+          onModelNotLoadedPress={() => router.push('/(tabs)/models')}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

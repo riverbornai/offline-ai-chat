@@ -4,7 +4,7 @@ import { Storage } from '../utils/storage';
 
 // Simple UUID generator for React Native
 const generateId = (): string => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
     const v = c == 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -31,18 +31,42 @@ export interface AppSettings {
   systemPrompt: string;
 }
 
+// Prior defaults, kept only so we can detect+migrate devices that already
+// persisted one of them (mobx-persist-store rehydrates over the field
+// initializer, so simply changing the string below has no effect for
+// existing installs unless we explicitly upgrade matching persisted values).
+const LEGACY_DEFAULT_SYSTEM_PROMPTS = [
+  'You are a helpful and engaging AI assistant. Provide concise, natural, and helpful answers.',
+  'You are a helpful, private, on-device AI assistant. Answer the user\'s question directly, ' +
+  'in your own voice, as yourself. Do not roleplay as a customer support agent, do not write ' +
+  'emails or letters, and never sign off with things like "Your Name" or "Your Company" — you ' +
+  'have no company and are not representing a business unless the user explicitly says you are. ' +
+  'Stay on the exact topic asked. Keep answers concise and natural.',
+];
+
+// Kept intentionally short and plain. Small on-device models (1-2B params,
+// like TinyLlama) don't reliably treat a long, descriptive system prompt as
+// behavior rules — they tend to riff on it as *content* instead (e.g. seeing
+// words like "offline" and "assistant" and generating a fake Q&A transcript
+// about being an offline assistant, rather than actually being one). Short,
+// direct, imperative sentences hold up much better at this model size.
+const DEFAULT_SYSTEM_PROMPT =
+  'You are a helpful assistant. Reply to the user directly and briefly. ' +
+  'Only answer the message you were just given. Do not invent example ' +
+  'conversations, Q&A lists, or additional users and replies.';
+
 class ChatSessionStore {
   sessions: ChatSession[] = [];
   activeSessionId: string | null = null;
   isGenerating: boolean = false;
 
   settings: AppSettings = {
-    systemPrompt: 'You are a helpful and engaging AI assistant. Provide concise, natural, and helpful answers.',
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
   };
 
   constructor() {
     makeAutoObservable(this);
-    
+
     makePersistable(this, {
       name: 'ChatSessionStore',
       properties: [
@@ -51,6 +75,16 @@ class ChatSessionStore {
         'settings'
       ],
       storage: Storage,
+    }).then(() => {
+      // One-time migration: if this device already persisted the old default
+      // prompt (untouched by the user), upgrade it to the new default so the
+      // improved prompt actually takes effect instead of being masked by
+      // rehydration.
+      runInAction(() => {
+        if (LEGACY_DEFAULT_SYSTEM_PROMPTS.includes(this.settings.systemPrompt)) {
+          this.settings.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        }
+      });
     }).catch(console.error);
   }
 
@@ -126,7 +160,7 @@ class ChatSessionStore {
     console.log('ChatSessionStore.updateMessage called with:', messageId, text);
     const messageIndex = this.activeSession.messages.findIndex(m => m.id === messageId);
     console.log('Message index found:', messageIndex);
-    
+
     if (messageIndex >= 0) {
       runInAction(() => {
         console.log('Updating message text from:', this.activeSession!.messages[messageIndex].text, 'to:', text);
@@ -235,16 +269,16 @@ class ChatSessionStore {
   // Clean corrupted messages from the active session
   cleanCorruptedMessages = () => {
     if (!this.activeSession) return;
-    
+
     runInAction(() => {
       if (this.activeSession) {
         this.activeSession.messages = this.activeSession.messages.filter(msg => {
           const text = msg.text || '';
-          return !text.includes('"stop":') && 
-                 !text.includes('"temperature":') && 
-                 !text.includes('"max_tokens":') &&
-                 !text.includes('"top_p":') &&
-                 !text.includes('"top_k":');
+          return !text.includes('"stop":') &&
+            !text.includes('"temperature":') &&
+            !text.includes('"max_tokens":') &&
+            !text.includes('"top_p":') &&
+            !text.includes('"top_k":');
         });
       }
     });
@@ -272,7 +306,7 @@ class ChatSessionStore {
   getSessionStats = () => {
     const totalSessions = this.sessions.length;
     const totalMessages = this.sessions.reduce((sum, session) => sum + session.messages.length, 0);
-    
+
     return {
       totalSessions,
       totalMessages,

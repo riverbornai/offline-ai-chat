@@ -2,6 +2,7 @@ import { LlamaContext } from '@pocketpalai/llama.rn';
 import { makeAutoObservable, runInAction, toJS } from 'mobx';
 import { makePersistable } from 'mobx-persist-store';
 import { Platform } from 'react-native';
+import { ChatCompletionMessage } from '../utils/chat';
 import {
     checkModelFileExists,
     deleteModelFile,
@@ -31,6 +32,35 @@ export interface CompletionParams {
   top_k: number;
   stop: string[];
 }
+
+// Explicit Jinja chat-template overrides, keyed by a substring of the model id.
+//
+// Why this exists: llama.rn will happily render *some* chat template for a
+// model even when the GGUF has no embedded `tokenizer.chat_template` — it
+// falls back to a generic default. For a model whose fine-tune expects a
+// specific turn format (e.g. TinyLlama-1.1B-Chat-v1.0's Zephyr-style
+// `<|system|>` / `<|user|>` / `<|assistant|>` markers), a mismatched
+// fallback template produces exactly the symptoms of a badly-instructed
+// tiny model: it echoes the system prompt back as if it were text to edit,
+// rambles without ever hitting its real stop token, and gets truncated mid
+// sentence at max_tokens instead of stopping naturally. Forcing the known
+// correct template fixes that regardless of what the GGUF's metadata does
+// or doesn't contain.
+const CHAT_TEMPLATE_OVERRIDES: Record<string, string> = {
+  tinyllama:
+    "{% for message in messages %}" +
+    "{% if message['role'] == 'user' %}" +
+    "{{ '<|user|>\n' + message['content'] + eos_token }}" +
+    "{% elif message['role'] == 'system' %}" +
+    "{{ '<|system|>\n' + message['content'] + eos_token }}" +
+    "{% elif message['role'] == 'assistant' %}" +
+    "{{ '<|assistant|>\n' + message['content'] + eos_token }}" +
+    "{% endif %}" +
+    "{% if loop.last and add_generation_prompt %}" +
+    "{{ '<|assistant|>\n' }}" +
+    "{% endif %}" +
+    "{% endfor %}",
+};
 
 class ModelStore {
   models: AppModel[] = [
@@ -138,36 +168,44 @@ class ModelStore {
   n_batch: number = 256;      // Reduced for better memory usage
 
   // Default completion parameters for language learning
+  // stop: end-of-turn tokens across the model families this app ships
+  // (Llama/TinyLlama, Phi-3/Phi-4, Llama-3-style, Gemma). These are a safety
+  // net only — when a call passes `messages`, the model's own Jinja chat
+  // template + jinja's built-in stop handling does the real work, so a
+  // response ends when the model actually finishes, not when it exhausts
+  // max_tokens.
   defaultCompletionParams: CompletionParams = {
     temperature: 0.7,
     max_tokens: 100,
     top_p: 0.9,
     top_k: 40,
-    stop: ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>']
+    stop: ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>', '<end_of_turn>']
   };
 
   constructor() {
     makeAutoObservable(this);
     
-    // Apply platform-specific optimizations
+    // Apply platform-specific optimizations (before rehydration as defaults)
     this.applyPlatformOptimizations();
     
     makePersistable(this, {
       name: 'ModelStore',
+      // NOTE: n_threads, n_batch, n_context, n_gpu_layers are intentionally
+      // NOT persisted — they are computed from the current platform at runtime.
+      // Persisting them caused stale values (e.g. threads=2, batch=256) to
+      // survive app updates and overwrite the correct platform values.
       properties: [
         'models',
         'activeModelId',
-        'n_context',
-        'n_gpu_layers',
-        'n_threads',
-        'n_batch',
         'defaultCompletionParams',
         'isOnboardingComplete'
       ],
       storage: Storage,
     }).then(() => {
-      // After rehydration, ensure any newly added default models are present
+      // Re-apply platform optimizations AFTER rehydration so that any
+      // previously-persisted stale values can never override them.
       runInAction(() => {
+        this.applyPlatformOptimizations();
         this.syncModels();
       });
       this.initializeStore();
@@ -175,23 +213,28 @@ class ModelStore {
   }
 
   applyPlatformOptimizations = () => {
+    // navigator.hardwareConcurrency is unreliable in React Native (Hermes/JSC
+    // may return undefined). Instead we use a fixed safe value of 4 threads:
+    //   → matches the 2 performance + 2 efficiency core layout of typical
+    //     octa-core SoCs (Helio G85/G200, SD 4-gen, Exynos 1xxx)
+    //   → using all 8 threads hurts throughput on big.LITTLE because the OS
+    //     scheduler competes with the app for the same cores
+    //   → 4 is the empirically best value for on-device LLM inference
     if (Platform.OS === 'android') {
-      // Conservative settings for Android
       this.n_context = 1024;
       this.n_gpu_layers = 0;
-      this.n_threads = 2;
-      this.n_batch = 256;
+      this.n_threads = 4;   // Safe for all modern Android (2019+) octa-core SoCs
+      this.n_batch = 512;   // Faster prefill; fine for models up to ~2 GB
     } else if (Platform.OS === 'ios') {
-      // Slightly more aggressive settings for iOS
       this.n_context = 1536;
       this.n_gpu_layers = 0;
-      this.n_threads = 3;
-      this.n_batch = 384;
+      this.n_threads = 4;
+      this.n_batch = 512;
     } else {
-      // Default settings for other platforms
+      // Desktop / other platforms (typically higher CPU core count and more RAM)
       this.n_context = 2048;
       this.n_gpu_layers = 0;
-      this.n_threads = 4;
+      this.n_threads = 8;
       this.n_batch = 512;
     }
   };
@@ -461,8 +504,13 @@ class ModelStore {
       
       console.log(`Initializing model context with path: ${modelPath}`);
       
-      // Use safer settings for larger/newer models on mid-range devices
-      const isLargeModel = model.id.includes('gemma-4') || model.id.includes('phi-4');
+      // Use safer settings for larger/newer models on mid-range devices.
+      // Note: phi-4-mini-iq2_m is a heavily quantized 1.4GB model — exclude it
+      // from the "large model" path so it gets a full-sized batch (256) instead
+      // of 128. A batch of 128 causes the prefill phase to take 20+ seconds on
+      // every message even though the model itself is tiny.
+      const isLightQuantized = model.id.includes('iq2') || model.id.includes('iq3');
+      const isLargeModel = (model.id.includes('gemma-4') || model.id.includes('phi-4')) && !isLightQuantized;
       const finalCtx = isLargeModel ? Math.min(this.n_context, 512) : this.n_context;
       const finalBatch = isLargeModel ? Math.min(this.n_batch, 128) : this.n_batch;
       const useMlock = Platform.OS === 'android' ? false : (isLargeModel ? false : true); // Disable mlock for all models on Android and large models on other platforms to prevent OOM
@@ -582,7 +630,7 @@ class ModelStore {
   // };
 
   generateCompletion = async (
-    prompt: string,
+    input: string | ChatCompletionMessage[],
     params: Partial<CompletionParams> = {},
     onToken?: (token: string) => void
   ): Promise<string> => {
@@ -593,6 +641,19 @@ class ModelStore {
     // Convert MobX observables to plain objects
     const completionParams = toJS({ ...this.defaultCompletionParams, ...params });
 
+    // IMPORTANT: stop sequences are merged, never overwritten. Each model's
+    // real end-of-turn token (</s>, <|end|>, <|eot_id|>, ...) lives in
+    // defaultCompletionParams.stop. If a caller-supplied `stop` (e.g. turn
+    // markers like "\nUser:") simply replaced that array via object spread,
+    // the model's actual EOS token would drop out of the stop list for that
+    // call, and generation would run all the way to max_tokens every single
+    // time instead of stopping once the answer is done — a major, easy-to-miss
+    // source of latency on-device.
+    const mergedStop = Array.from(new Set([
+      ...toJS(this.defaultCompletionParams.stop || []),
+      ...(params.stop || []),
+    ]));
+
     runInAction(() => {
       this.isInferencing = true;
     });
@@ -601,14 +662,27 @@ class ModelStore {
 
     try {
       let fullResponse = '';
+      const usingChatMessages = Array.isArray(input);
+      const templateOverride = this.activeModelId
+        ? Object.entries(CHAT_TEMPLATE_OVERRIDES).find(([key]) =>
+            this.activeModelId!.toLowerCase().includes(key)
+          )?.[1]
+        : undefined;
+
       // Ensure all parameters are plain objects, not MobX observables
       const completionOptions = {
-        prompt: prompt,
+        ...(usingChatMessages
+          ? {
+              messages: input as ChatCompletionMessage[],
+              jinja: true,
+              ...(templateOverride ? { chat_template: templateOverride } : {}),
+            }
+          : { prompt: input as string }),
         n_predict: completionParams.max_tokens,
         temperature: completionParams.temperature,
         top_p: completionParams.top_p,
         top_k: completionParams.top_k,
-        stop: toJS(completionParams.stop), // Convert array to plain array
+        stop: mergedStop,
       };
 
       console.log('Starting completion with options:', completionOptions);

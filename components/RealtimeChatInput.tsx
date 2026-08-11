@@ -22,6 +22,8 @@ interface RealtimeChatInputProps {
   isLoading: boolean;
   colors: any;
   placeholder?: string;
+  isModelLoaded?: boolean;
+  onModelNotLoadedPress?: () => void;
 }
 
 const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
@@ -29,6 +31,8 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
   isLoading,
   colors,
   placeholder,
+  isModelLoaded = true,
+  onModelNotLoadedPress,
 }) => {
   const { chatSessionStore } = useStores();
   const [isRecording, setIsRecording] = useState(false);
@@ -261,33 +265,52 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
       {/* Input row */}
       <View style={styles.inputRow}>
         {/* Pill-shaped text box */}
-        <View
-          style={[
-            styles.textInputWrapper,
-            {
-              backgroundColor: colors.surfaceMuted ?? colors.background ?? '#f4f7f4',
-              borderColor: isRecording ? colors.error : colors.border,
-              shadowColor: colors.shadow ?? '#000',
-            },
-          ]}
-        >
-          <TextInput
-            ref={textInputRef}
-            style={[styles.textInput, { color: colors.text }]}
-            placeholder={isRecording ? 'Listening…' : (placeholder ?? 'Type a message…')}
-            placeholderTextColor={colors.muted}
-            value={isRecording ? transcription : textInput}
-            onChangeText={isRecording ? undefined : setTextInput}
-            editable={!isRecording && !isBusy}
-            multiline
-            maxLength={1000}
-            returnKeyType="default"
-            blurOnSubmit={false}
-          />
-        </View>
+        {!isModelLoaded ? (
+          <TouchableOpacity
+            style={[
+              styles.textInputWrapper,
+              {
+                backgroundColor: colors.surfaceMuted ?? colors.background ?? '#f4f7f4',
+                borderColor: colors.border,
+                shadowColor: colors.shadow ?? '#000',
+              },
+            ]}
+            onPress={onModelNotLoadedPress}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.textInput, { color: colors.muted }]}>
+              {placeholder ?? 'Load a model first'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <View
+            style={[
+              styles.textInputWrapper,
+              {
+                backgroundColor: colors.surfaceMuted ?? colors.background ?? '#f4f7f4',
+                borderColor: isRecording ? colors.error : colors.border,
+                shadowColor: colors.shadow ?? '#000',
+              },
+            ]}
+          >
+            <TextInput
+              ref={textInputRef}
+              style={[styles.textInput, { color: colors.text }]}
+              placeholder={isRecording ? 'Listening…' : (placeholder ?? 'Type a message…')}
+              placeholderTextColor={colors.muted}
+              value={isRecording ? transcription : textInput}
+              onChangeText={isRecording ? undefined : setTextInput}
+              editable={!isRecording && !isBusy}
+              multiline
+              maxLength={1000}
+              returnKeyType="default"
+              blurOnSubmit={false}
+            />
+          </View>
+        )}
 
         {/* Send button (visible when text typed) */}
-        {hasText && !isRecording && (
+        {hasText && !isRecording && isModelLoaded && (
           <TouchableOpacity
             style={[
               styles.actionButton,
@@ -304,7 +327,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
         )}
 
         {/* Mic / Stop button */}
-        {(!hasText || isRecording) && (
+        {(!hasText || isRecording || !isModelLoaded) && (
           <TouchableOpacity
             style={[
               styles.actionButton,
@@ -313,10 +336,10 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
                 backgroundColor: isRecording ? colors.error : colors.primary,
                 shadowColor: isRecording ? colors.error : colors.primary,
               },
-              isBusy && !isRecording && styles.disabledButton,
+              isBusy && !isRecording && isModelLoaded && styles.disabledButton,
             ]}
-            onPress={isRecording ? stopRecording : startRecording}
-            disabled={isBusy && !isRecording}
+            onPress={!isModelLoaded ? onModelNotLoadedPress : isRecording ? stopRecording : startRecording}
+            disabled={isBusy && !isRecording && isModelLoaded}
             activeOpacity={0.75}
           >
             <Ionicons

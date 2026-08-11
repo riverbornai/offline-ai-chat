@@ -233,7 +233,7 @@ const TalkScreen: React.FC = observer(() => {
       const promptBuilder = new ConversationPromptBuilder(
         chatSessionStore.settings.systemPrompt
       );
-      const prompt = promptBuilder.buildPrompt(cleaned, chatSessionStore.currentMessages);
+      const messages = promptBuilder.buildMessages(cleaned, chatSessionStore.currentMessages);
       let assistantMessage = chatSessionStore.addMessage({ text: '', author: 'assistant', type: 'conversation' });
       if (!assistantMessage) {
         chatSessionStore.createConversationSession('Voice Assistant');
@@ -246,8 +246,11 @@ const TalkScreen: React.FC = observer(() => {
       ttsQueue.current = [];
       let accumulatedResponse = '';
       await modelStore.generateCompletion(
-        prompt,
-        { temperature: 0.7, max_tokens: 512, stop: ['\nUser:', '\nAssistant:'] },
+        messages,
+        // Voice replies should be short — 180 tokens keeps time-to-first-spoken-word
+        // low. The model's real end-of-turn token (via the chat template) still
+        // stops generation earlier whenever the answer naturally finishes sooner.
+        { temperature: 0.7, max_tokens: 180, stop: ['\nUser:', '\nAssistant:'] },
         (token: string) => {
           if (!generationActiveRef.current) return;
           accumulatedResponse += token;
