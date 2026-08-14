@@ -10,8 +10,10 @@ export const cleanTranscript = (text: string): string => {
   if (!text) return '';
 
   let cleaned = text
-    .replace(/\[BLANK_AUDIO\]/gi, '')
-    .replace(/\(BLANK_AUDIO\)/gi, '')
+    // Remove Whisper audio artifact tokens in brackets (e.g. [inaudible], [BLANK_AUDIO], [music], [applause])
+    .replace(/\[[^\]]+\]/g, '')
+    // Remove Whisper audio artifact tokens in parentheses (e.g. (inaudible), (BLANK_AUDIO), (music))
+    .replace(/\((?:inaudible|blank_audio|music|applause|laughter|sigh|cough|noise|unclear|silence|background noise|snorting|gasp|screaming|cheering|\.\.\.)\)/gi, '')
     .trim();
 
   if (!cleaned) return '';

@@ -10,7 +10,8 @@ import {
   Animated,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 import { useColorScheme } from '../hooks/useColorScheme';
@@ -104,6 +105,13 @@ const TalkScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const { chatSessionStore, modelStore } = useStores();
+  const insets = useSafeAreaInsets();
+  let tabBarHeight = 0;
+  try {
+    tabBarHeight = useBottomTabBarHeight();
+  } catch (e) {
+    tabBarHeight = 0;
+  }
 
   const [state, setState] = useState<TalkState>('idle');
   const [isWhisperLoading, setIsWhisperLoading] = useState(!whisperService.isModelLoaded());
@@ -134,6 +142,7 @@ const TalkScreen: React.FC = observer(() => {
     const noisePhrases = new Set([
       'subtitles by', 'thanks for watching', 'please subscribe', 'viewers like you',
       'english subtitles', 'english sub', 'amara.org', 'bye for now',
+      'inaudible', 'blank audio', 'music', 'applause', 'laughter',
     ]);
     if (noisePhrases.has(normalized)) return true;
     return false;

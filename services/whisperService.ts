@@ -196,7 +196,7 @@ class WhisperService {
       console.log('Transcription result:', result);
       
       return {
-        text: result.text || '',
+        text: cleanTranscript(result.text || ''),
         language: result.language || WHISPER_CONFIG.language,
         segments: result.segments || [],
       };

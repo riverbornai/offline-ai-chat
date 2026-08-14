@@ -13,6 +13,7 @@ import {
 import AudioRecord from 'react-native-audio-record';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
 import { WhisperResult, whisperService } from '../services/whisperService';
+import { cleanTranscript } from '../utils/chat';
 
 type TabType = 'recorder' | 'upload';
 
@@ -193,9 +194,9 @@ const WhisperSpeechToText: React.FC = () => {
       
       console.log('Transcription result:', result);
       
-      let transcribedText = result.text && result.text.trim();
+      let transcribedText = cleanTranscript(result.text || '');
       if (!transcribedText && Array.isArray(result.segments) && result.segments.length > 0) {
-        transcribedText = result.segments.map(seg => seg.text).join(' ').trim();
+        transcribedText = cleanTranscript(result.segments.map(seg => seg.text).join(' '));
         console.log('Aggregated text from segments:', transcribedText);
       }
       if (transcribedText) {
