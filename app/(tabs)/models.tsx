@@ -21,6 +21,8 @@ import { useColorScheme } from '../../hooks/useColorScheme';
 import { AVAILABLE_MODELS, downloadModel, quickSetup } from '../../utils/modelSetup';
 import { formatBytes, getModelFileInfo } from '../../utils/platformPaths';
 import { ttsService } from '../../services/ttsService';
+import { KokoroVoiceModal } from '../../components/KokoroVoiceModal';
+import { getKokoroVoiceById, getKokoroVoiceDisplayName } from '../../constants/kokoroVoices';
 
 const ModelsScreen: React.FC = observer(() => {
   const colorScheme = useColorScheme();
@@ -46,6 +48,7 @@ const ModelsScreen: React.FC = observer(() => {
   const [downloadingModelId, setDownloadingModelId] = useState<string | null>(null);
   const [lastFailedModelId, setLastFailedModelId] = useState<string | null>(null);
   const [partialDownloadInfo, setPartialDownloadInfo] = useState<{ [modelId: string]: number }>({});
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
 
   React.useEffect(() => {
     // On mount, check for in-progress downloads and attach handlers
@@ -279,6 +282,7 @@ const ModelCard: React.FC<{
   handleDownload: (id: string) => void;
   handleLoadModel: (id: string) => void;
   handleQuickSetup: () => void;
+  onOpenVoiceModal?: () => void;
 }> = observer(({
   model,
   colors,
@@ -287,6 +291,7 @@ const ModelCard: React.FC<{
   handleDownload,
   handleLoadModel,
   handleQuickSetup,
+  onOpenVoiceModal,
 }) => {
   const { modelStore } = useStores();
   const isActive = modelStore.activeModelId === model.id;
@@ -549,6 +554,53 @@ const ModelCard: React.FC<{
           </View>
         )))}
       </View>
+
+      {/* Kokoro Voice Model Selector Button */}
+      {model.type === 'tts' && model.id.includes('kokoro') && (
+        <TouchableOpacity
+          style={{
+            marginTop: 12,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            borderRadius: 16,
+            backgroundColor: `${colors.primary}12`,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderWidth: 1,
+            borderColor: `${colors.primary}25`,
+          }}
+          onPress={onOpenVoiceModal}
+          activeOpacity={0.7}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: `${colors.primary}20`,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Ionicons name="mic" size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={{ fontSize: 11, fontFamily: 'Sora-Bold', color: colors.primary, letterSpacing: 0.5 }}>
+                KOKORO VOICE MODEL
+              </Text>
+              <Text style={{ fontSize: 14, fontFamily: 'Sora-Bold', color: colors.text, marginTop: 2 }}>
+                {getKokoroVoiceDisplayName(getKokoroVoiceById(modelStore.activeKokoroSpeakerId ?? 0))}
+              </Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${colors.primary}18`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Sora-Bold', color: colors.primary }}>
+              Change
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 });
@@ -654,6 +706,7 @@ const ModelCard: React.FC<{
               handleDownload={handleDownload}
               handleLoadModel={handleLoadModel}
               handleQuickSetup={handleQuickSetup}
+              onOpenVoiceModal={() => setVoiceModalVisible(true)}
             />
           ))}
 
@@ -698,6 +751,11 @@ const ModelCard: React.FC<{
           ))}
         </View>
       </ScrollView>
+
+      <KokoroVoiceModal
+        visible={voiceModalVisible}
+        onClose={() => setVoiceModalVisible(false)}
+      />
     </SafeAreaView>
   );
 });

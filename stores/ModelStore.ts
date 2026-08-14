@@ -142,17 +142,19 @@ class ModelStore {
       languageSupport: ['English']
     },
     {
-      id: 'kokoro-multi-lang-v1_1',
-      name: 'Kokoro v1.1 (Multi-lang)',
-      path: 'kokoro-multi-lang-v1_1.onnx',
+      id: 'kokoro-en-v0_19',
+      name: 'Kokoro English (11 Voices)',
+      path: 'kokoro-en-v0_19.onnx',
       type: 'tts',
       isDownloaded: false,
       isLoading: false,
-      size: '344MB',
-      description: 'High-quality multi-lingual TTS model. Supports English, Chinese, French, German, Italian, Japanese, Korean, Portuguese, and Spanish.',
-      languageSupport: ['English', 'Chinese', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Portuguese', 'Spanish']
+      size: '310MB',
+      description: 'High-quality Kokoro TTS model with 11 studio voices (American & British male/female).',
+      languageSupport: ['English']
     }
   ];
+
+  activeKokoroSpeakerId: number = 0;
 
   activeModelId: string | undefined = undefined;
   context: LlamaContext | undefined = undefined;
@@ -197,6 +199,7 @@ class ModelStore {
       properties: [
         'models',
         'activeModelId',
+        'activeKokoroSpeakerId',
         'defaultCompletionParams',
         'isOnboardingComplete'
       ],
@@ -320,15 +323,15 @@ class ModelStore {
         languageSupport: ['English']
       },
       {
-        id: 'kokoro-multi-lang-v1_1',
-        name: 'Kokoro v1.1 (Multi-lang)',
-        path: 'kokoro-multi-lang-v1_1.onnx',
+        id: 'kokoro-en-v0_19',
+        name: 'Kokoro English (11 Voices)',
+        path: 'kokoro-en-v0_19.onnx',
         type: 'tts',
         isDownloaded: false,
         isLoading: false,
-        size: '344MB',
-        description: 'High-quality multi-lingual TTS model. Supports English, Chinese, French, German, Italian, Japanese, Korean, Portuguese, and Spanish.',
-        languageSupport: ['English', 'Chinese', 'French', 'German', 'Italian', 'Japanese', 'Korean', 'Portuguese', 'Spanish']
+        size: '310MB',
+        description: 'High-quality Kokoro TTS model with 11 studio voices (American & British male/female).',
+        languageSupport: ['English']
       }
     ];
 
@@ -450,6 +453,12 @@ class ModelStore {
   setActiveModel = (modelId: string) => {
     runInAction(() => {
       this.activeModelId = modelId;
+    });
+  };
+
+  setKokoroSpeakerId = (speakerId: number) => {
+    runInAction(() => {
+      this.activeKokoroSpeakerId = speakerId;
     });
   };
 

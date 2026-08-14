@@ -293,8 +293,12 @@ class TTSService {
         console.log(`[TTSService] Chunk ${i + 1}/${chunks.length}: "${chunkText.substring(0, 35)}..."`);
 
         const startTime = Date.now();
+        const activeSid = options.speakerId !== undefined 
+          ? options.speakerId 
+          : (modelStore.activeKokoroSpeakerId ?? 0);
+
         const audio = await this.engine.generateSpeech(chunkText, {
-          sid: options.speakerId !== undefined ? options.speakerId : 0,
+          sid: activeSid,
           speed: options.speed || 1.0,
         });
 
@@ -376,6 +380,11 @@ class TTSService {
     this.isLoaded = false;
     this.activeModelId = null;
     console.log('[TTSService] Cleaned up');
+  }
+
+  async previewVoice(speakerId: number, voiceName?: string): Promise<void> {
+    const text = `Hello! I am ${voiceName || 'Kokoro'}, your text-to-speech voice.`;
+    await this.speak(text, { speakerId });
   }
 
   getIsLoaded(): boolean { return this.isLoaded; }

@@ -2,6 +2,65 @@ import { ChatMessage } from '../stores/ChatSessionStore';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
 
+/**
+ * Cleans Whisper STT output by removing audio artifact tokens (e.g. [BLANK_AUDIO])
+ * and deduplicating repetitive hallucinated sentences, lines, or phrases.
+ */
+export const cleanTranscript = (text: string): string => {
+  if (!text) return '';
+
+  let cleaned = text
+    .replace(/\[BLANK_AUDIO\]/gi, '')
+    .replace(/\(BLANK_AUDIO\)/gi, '')
+    .trim();
+
+  if (!cleaned) return '';
+
+  // 1. Deduplicate consecutive duplicate lines
+  const lines = cleaned.split(/\r?\n+/);
+  const uniqueLines: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const norm = trimmed.toLowerCase().replace(/[^a-z0-9]/gi, '');
+    const lastNorm = uniqueLines.length > 0
+      ? uniqueLines[uniqueLines.length - 1].toLowerCase().replace(/[^a-z0-9]/gi, '')
+      : null;
+    if (norm !== lastNorm) {
+      uniqueLines.push(trimmed);
+    }
+  }
+  cleaned = uniqueLines.join(' ');
+
+  // 2. Deduplicate consecutive duplicate sentences split by . ! ?
+  const sentences = cleaned.match(/[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g) || [cleaned];
+  const uniqueSentences: string[] = [];
+  for (const s of sentences) {
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+    const norm = trimmed.toLowerCase().replace(/[^a-z0-9]/gi, '');
+    const lastNorm = uniqueSentences.length > 0
+      ? uniqueSentences[uniqueSentences.length - 1].toLowerCase().replace(/[^a-z0-9]/gi, '')
+      : null;
+    if (norm !== lastNorm) {
+      uniqueSentences.push(trimmed);
+    }
+  }
+  cleaned = uniqueSentences.join(' ');
+
+  // 3. Deduplicate repeating word/phrase sequences (e.g., "Hello how are you Hello how are you")
+  let prev = '';
+  let iterations = 0;
+  while (prev !== cleaned && iterations < 5) {
+    prev = cleaned;
+    iterations++;
+    cleaned = cleaned.replace(/\b([a-z0-9]+(?:[\s,]+[a-z0-9]+)*?)(?:[\s,]+\1)+(?=\b|[.!?]|$)/gi, '$1');
+  }
+
+  return cleaned.replace(/\s+/g, ' ').trim();
+};
+
+
 export interface ChatCompletionMessage {
   role: ChatRole;
   content: string;

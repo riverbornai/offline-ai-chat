@@ -17,7 +17,7 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import { useStores } from '../components/StoreProvider';
 import { ttsService } from '../services/ttsService';
 import { whisperService } from '../services/whisperService';
-import { ConversationPromptBuilder } from '../utils/chat';
+import { ConversationPromptBuilder, cleanTranscript } from '../utils/chat';
 
 const { width, height } = Dimensions.get('window');
 
@@ -124,11 +124,7 @@ const TalkScreen: React.FC = observer(() => {
   const stopCalledRef = useRef(false); // Fix 3: prevent double handleSTTResult
 
   const isNoiseOrHallucination = (text: string): boolean => {
-    const cleanedText = text
-      .trim()
-      .replace(/\[BLANK_AUDIO\]/gi, '')
-      .replace(/\(BLANK_AUDIO\)/gi, '')
-      .trim();
+    const cleanedText = cleanTranscript(text);
     if (!cleanedText) return true;
     const normalized = cleanedText
       .toLowerCase()
@@ -213,7 +209,7 @@ const TalkScreen: React.FC = observer(() => {
 
   const handleSTTResult = async (text: string) => {
     if (isProcessingRef.current) return;
-    const cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
+    const cleaned = cleanTranscript(text);
     if (!cleaned || isNoiseOrHallucination(cleaned)) {
       setState('idle');
       isProcessingRef.current = false;
@@ -330,14 +326,14 @@ const TalkScreen: React.FC = observer(() => {
       setAssistantText('');
       await whisperService.startRealtimeTranscription({
         onTranscriptionUpdate: (result) => {
-          const cleaned = result.text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim();
+          const cleaned = cleanTranscript(result.text);
           setTranscript(cleaned);
           transcriptRef.current = cleaned;
         },
         onComplete: (result) => {
           // Skip if stopListening already processed this result
           if (stopCalledRef.current) return;
-          const cleaned = result.text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim();
+          const cleaned = cleanTranscript(result.text);
           if (cleaned) handleSTTResult(cleaned);
           else setState('idle');
         },
@@ -359,7 +355,7 @@ const TalkScreen: React.FC = observer(() => {
     try {
       await whisperService.stopRealtimeTranscription();
       const finalTranscript = transcriptRef.current;
-      const cleaned = finalTranscript.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim();
+      const cleaned = cleanTranscript(finalTranscript);
       if (cleaned && !isNoiseOrHallucination(cleaned)) handleSTTResult(cleaned);
       else setState('idle');
     } catch (err) {

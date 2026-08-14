@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RealtimeTranscriptionResult, whisperService } from '../services/whisperService';
 import { ttsService } from '../services/ttsService';
 import { useStores } from './StoreProvider';
+import { cleanTranscript } from '../utils/chat';
 
 interface RealtimeChatInputProps {
   onSendMessage: (text: string) => void;
@@ -139,7 +140,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
       try {
         await whisperService.startRealtimeTranscription({
           onTranscriptionUpdate: (result: RealtimeTranscriptionResult) => {
-            const cleaned = result.text.replace(/\[BLANK_AUDIO\]/gi, '').replace(/\(BLANK_AUDIO\)/gi, '').trim();
+            const cleaned = cleanTranscript(result.text);
             if (cleaned) {
               setTranscription(cleaned);
               chatSessionStore.updateTranscriptionMessage(cleaned, result.isFinal);

@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import { WHISPER_CONFIG } from '../config/whisperConfig';
 import { downloadModelToStorage, getModelFilePath } from '../utils/platformPaths';
+import { cleanTranscript } from '../utils/chat';
 
 // Import whisper.rn - this will throw if not available
 let initWhisper: any = null;
@@ -244,10 +245,11 @@ class WhisperService {
       // Subscribe to real-time events
       subscribe((evt: any) => {
         const { isCapturing, data, processTime, recordingTime } = evt;
+        const cleanedText = cleanTranscript(data.result || '');
         
         if (callbacks.onTranscriptionUpdate) {
           callbacks.onTranscriptionUpdate({
-            text: data.result || '',
+            text: cleanedText,
             isFinal: !isCapturing,
             language: WHISPER_CONFIG.language,
           });
@@ -255,7 +257,7 @@ class WhisperService {
 
         if (!isCapturing && callbacks.onComplete) {
           callbacks.onComplete({
-            text: data.result || '',
+            text: cleanedText,
             language: WHISPER_CONFIG.language,
             segments: [],
           });

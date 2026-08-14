@@ -31,9 +31,9 @@ const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
   'en_US-amy-low.onnx': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/en_US-amy-low.onnx?download=true',
   'en_US-amy-low-tokens.txt': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/tokens.txt?download=true',
   'espeak-ng-data.zip': 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2',
-  'kokoro-multi-lang-v1_1.onnx': 'https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/model.onnx?download=true',
-  'kokoro-multi-lang-v1_1-voices.bin': 'https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/voices.bin?download=true',
-  'kokoro-multi-lang-v1_1-tokens.txt': 'https://huggingface.co/csukuangfj/kokoro-multi-lang-v1_1/resolve/main/tokens.txt?download=true',
+  'kokoro-en-v0_19.onnx': 'https://huggingface.co/csukuangfj/kokoro-en-v0_19/resolve/main/model.onnx?download=true',
+  'kokoro-en-v0_19-voices.bin': 'https://huggingface.co/csukuangfj/kokoro-en-v0_19/resolve/main/voices.bin?download=true',
+  'kokoro-en-v0_19-tokens.txt': 'https://huggingface.co/csukuangfj/kokoro-en-v0_19/resolve/main/tokens.txt?download=true',
 };
 
 /**
@@ -172,12 +172,13 @@ export const downloadModelToStorage = async (
             const finalFileInfo = await FileSystem.getInfoAsync(modelPath);
             const verificationSize = expectedSize ? expectedSize * 0.8 : 100; // 80% or 100 bytes for tokens
 
-            if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > verificationSize) {
+            if (finalFileInfo.exists && finalFileInfo.size > verificationSize) {
               onStatusUpdate?.(`Model downloaded successfully - Final size: ${formatBytes(finalFileInfo.size)}`);
               onProgress?.(1);
               resolve(modelPath);
             } else {
-              throw new Error(`Downloaded file is incomplete or corrupted (Size: ${finalFileInfo.size || 0} bytes)`);
+              const actualSize = finalFileInfo.exists ? finalFileInfo.size : 0;
+              throw new Error(`Downloaded file is incomplete or corrupted (Size: ${actualSize} bytes)`);
             }
           } catch (error) {
             reject(new Error(`Download verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
@@ -203,12 +204,13 @@ export const downloadModelToStorage = async (
                     const finalFileInfo = await FileSystem.getInfoAsync(modelPath);
                     const verificationSize = expectedSize ? expectedSize * 0.8 : 100;
 
-                    if (finalFileInfo.exists && finalFileInfo.size && finalFileInfo.size > verificationSize) {
+                    if (finalFileInfo.exists && finalFileInfo.size > verificationSize) {
                       onStatusUpdate?.(`Model downloaded successfully (resumed) - Final size: ${formatBytes(finalFileInfo.size)}`);
                       onProgress?.(1);
                       resolve(modelPath);
                     } else {
-                      throw new Error(`Resumed download is incomplete or corrupted (Size: ${finalFileInfo.size || 0} bytes)`);
+                      const actualSize = finalFileInfo.exists ? finalFileInfo.size : 0;
+                      throw new Error(`Resumed download is incomplete or corrupted (Size: ${actualSize} bytes)`);
                     }
                   } catch (error) {
                     reject(new Error(`Resume verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`));

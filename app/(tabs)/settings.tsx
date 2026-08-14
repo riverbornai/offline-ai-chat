@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
@@ -9,12 +9,15 @@ import { observer } from 'mobx-react';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { ttsService } from '../../services/ttsService';
+import { KokoroVoiceModal } from '../../components/KokoroVoiceModal';
+import { getKokoroVoiceById, getKokoroVoiceDisplayName } from '../../constants/kokoroVoices';
 
 const SettingsScreen = observer(() => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
   const isFocused = useIsFocused();
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
 
   // State to track loaded TTS engine (since ttsService state is not a MobX store)
   const [activeTtsId, setActiveTtsId] = React.useState<string | null>(null);
@@ -33,6 +36,9 @@ const SettingsScreen = observer(() => {
   const activeLlm = modelStore.activeModel?.name || 'Tap to select';
   const activeTtsModel = modelStore.models.find(m => m.id === activeTtsId && m.type === 'tts');
   const activeTtsName = activeTtsModel ? activeTtsModel.name : 'Tap to select';
+
+  const currentKokoroVoice = getKokoroVoiceById(modelStore.activeKokoroSpeakerId ?? 0);
+  const kokoroVoiceText = getKokoroVoiceDisplayName(currentKokoroVoice);
 
   const SettingItem = ({ 
     icon, 
@@ -113,6 +119,12 @@ const SettingsScreen = observer(() => {
             value={activeTtsName} 
             onPress={() => router.push({ pathname: '/models', params: { initialTab: 'tts' } })}
           />
+          <SettingItem 
+            icon="mic-outline" 
+            label="Kokoro Voice Model" 
+            value={kokoroVoiceText} 
+            onPress={() => setVoiceModalVisible(true)}
+          />
           <SettingItem icon="mic" label="STT Engine" value="Whisper (Local)" />
         </View>
 
@@ -127,6 +139,11 @@ const SettingsScreen = observer(() => {
             <Text style={[styles.footerText, { color: colors.muted }]}>Version 1.0.0</Text>
         </View>
       </ScrollView>
+
+      <KokoroVoiceModal
+        visible={voiceModalVisible}
+        onClose={() => setVoiceModalVisible(false)}
+      />
     </SafeAreaView>
   );
 });
