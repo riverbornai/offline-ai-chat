@@ -102,18 +102,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           </Text>
         </View>
 
-        {/* Stop TTS button — shown when AI is speaking */}
-        {isSpeaking && onStopTTS && (
-          <TouchableOpacity
-            style={[styles.stopButton, { backgroundColor: `${colors.error ?? '#ef4444'}15`, borderColor: `${colors.error ?? '#ef4444'}40` }]}
-            onPress={onStopTTS}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="stop-circle" size={16} color={colors.error ?? '#ef4444'} />
-            <Text style={[styles.stopLabel, { color: colors.error ?? '#ef4444' }]}>Stop</Text>
-          </TouchableOpacity>
-        )}
-
         {/* Status badge */}
         <View style={[
           styles.statusBadge,

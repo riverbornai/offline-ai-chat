@@ -455,7 +455,7 @@ const OnboardingScreen: React.FC = observer(() => {
               <Text style={[styles.stepLabel, { color: colors.primary }]}>STEP 2 OF 3</Text>
               <Text style={[styles.stepTitle, { color: colors.text }]}>Choose Voice Engine</Text>
               <Text style={[styles.stepSubtitle, { color: colors.muted }]}>
-                Select a speech synthesis engine for voice output.
+                Select a speech synthesis engine (Kokoro or Piper TTS) for voice output.
               </Text>
             </View>
 
@@ -650,7 +650,7 @@ const OnboardingScreen: React.FC = observer(() => {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom', 'left', 'right']}>
       {/* Header bar / Step Indicator */}
       <View style={styles.headerBar}>
         <View style={styles.brandRow}>
@@ -714,6 +714,7 @@ const styles = StyleSheet.create({
   },
   welcomeScrollContent: {
     padding: 24,
+    paddingBottom: 24,
     alignItems: 'center',
     justifyContent: 'center',
     flexGrow: 1,
@@ -774,7 +775,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     width: '100%',
-    marginTop: 24,
+    marginTop: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
@@ -816,12 +818,12 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingHorizontal: 24,
     paddingTop: 16,
-    paddingBottom: 48,
+    paddingBottom: 32,
   },
   footerContainer: {
     width: '100%',
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 12,
   },
   selectorCard: {
     borderRadius: 20,

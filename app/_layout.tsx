@@ -148,7 +148,7 @@ export default observer(function RootLayout() {
 
   return (
     <StoreProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomLightTheme}>
+      <ThemeProvider value={CustomDarkTheme}>
         {!modelStore.isOnboardingComplete ? (
           <OnboardingScreen />
         ) : (
@@ -157,7 +157,7 @@ export default observer(function RootLayout() {
             <Stack.Screen name="+not-found" />
           </Stack>
         )}
-        <StatusBar style="auto" />
+        <StatusBar style="light" />
       </ThemeProvider>
     </StoreProvider>
   );

@@ -4,13 +4,14 @@ import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +24,52 @@ import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
 import MessageBubble from './MessageBubble';
 import RealtimeChatInput from './RealtimeChatInput';
+
+// Custom animated 3-dot typing indicator for AI response generation
+const TypingDot: React.FC<{ delay: number; color: string }> = ({ delay, color }) => {
+  const scale = useRef(new Animated.Value(0.4)).current;
+  const opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1.25, duration: 320, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 0.4, duration: 320, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.4, duration: 320, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [delay]);
+
+  return (
+    <Animated.View
+      style={{
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+        backgroundColor: color,
+        transform: [{ scale }],
+        opacity,
+        marginHorizontal: 2.5,
+      }}
+    />
+  );
+};
+
+const TypingIndicator: React.FC<{ color: string }> = ({ color }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', height: 18, paddingHorizontal: 2 }}>
+    <TypingDot delay={0} color={color} />
+    <TypingDot delay={180} color={color} />
+    <TypingDot delay={360} color={color} />
+  </View>
+);
 
 const cleanLLMResponse = (response: string): string => {
   return response
@@ -284,9 +331,27 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
   };
 
   const renderLoadingIndicator = () => (
-    <View style={[styles.loadingBubble, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <ActivityIndicator color={colors.primary} size="small" />
-      <Text style={[styles.loadingText, { color: colors.muted }]}>AI is composing...</Text>
+    <View style={styles.loadingRow}>
+      <View style={[styles.avatar, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}30` }]}>
+        <Ionicons name="sparkles" size={14} color={colors.primary} />
+      </View>
+      <View style={styles.bubbleColumn}>
+        <View
+          style={[
+            styles.bubble,
+            {
+              backgroundColor: colors.surface,
+              borderColor: `${colors.primary}30`,
+              shadowColor: colors.primary ?? '#000',
+            },
+          ]}
+        >
+          <View style={styles.loadingContainer}>
+            <TypingIndicator color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.muted }]}>AI is composing...</Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 
@@ -295,7 +360,7 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         keyboardVerticalOffset={0}
       >
         <ChatHeader
@@ -315,15 +380,29 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
           showsVerticalScrollIndicator={false}
         >
           {chatSessionStore.currentMessages.length === 0 && renderWelcomeMessage()}
-          {chatSessionStore.currentMessages.map((message, index) => (
-            <MessageBubble
-              key={`${message.id}-${message.text.length}-${index}`}
-              message={message}
-              colors={colors}
-              isUser={message.author === 'user'}
-            />
-          ))}
-          {isLoading && chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1]?.author !== 'assistant' && renderLoadingIndicator()}
+          {chatSessionStore.currentMessages.map((message, index) => {
+            const isLastAssistantMessage =
+              message.author === 'assistant' &&
+              index === chatSessionStore.currentMessages.length - 1;
+            return (
+              <MessageBubble
+                key={`${message.id}-${message.text.length}-${index}`}
+                message={message}
+                colors={colors}
+                isUser={message.author === 'user'}
+                isLoading={isLoading && index === chatSessionStore.currentMessages.length - 1}
+                isSpeaking={isSpeaking && isLastAssistantMessage}
+                onStopTTS={() => {
+                  ttsService.stop().catch(console.warn);
+                  setIsSpeakingBoth(false);
+                }}
+              />
+            );
+          })}
+          {isLoading &&
+            (chatSessionStore.currentMessages.length === 0 ||
+              chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1]?.author === 'user') &&
+            renderLoadingIndicator()}
         </ScrollView>
         <RealtimeChatInput
           onSendMessage={handleSendMessage}
@@ -394,17 +473,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Sora-Bold',
   },
-  loadingBubble: {
+  loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginLeft: 12,
-    marginVertical: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    justifyContent: 'flex-start',
+    paddingLeft: 14,
+    paddingRight: 48,
+    marginVertical: 5,
+    gap: 8,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  bubbleColumn: {
+    maxWidth: '78%',
+    alignItems: 'flex-start',
+  },
+  bubble: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 22,
+    borderBottomLeftRadius: 6,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+    paddingVertical: 2,
   },
   loadingText: {
     fontSize: 14,

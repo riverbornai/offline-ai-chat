@@ -555,6 +555,51 @@ const ModelCard: React.FC<{
         )))}
       </View>
 
+      {/* Active AI Model Info Banner */}
+      {model.type === 'llm' && isActive && (
+        <View
+          style={{
+            marginTop: 12,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            borderRadius: 16,
+            backgroundColor: `${colors.success}12`,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderWidth: 1,
+            borderColor: `${colors.success}25`,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, marginRight: 8 }}>
+            <View style={{
+              width: 38,
+              height: 38,
+              borderRadius: 12,
+              backgroundColor: `${colors.success}20`,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Ionicons name="hardware-chip" size={20} color={colors.success} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontFamily: 'Sora-Bold', color: colors.success, letterSpacing: 0.5 }}>
+                ACTIVE AI MODEL
+              </Text>
+              <Text style={{ fontSize: 14, fontFamily: 'Sora-Bold', color: colors.text, marginTop: 2 }} numberOfLines={1} ellipsizeMode="tail">
+                {model.name} (Loaded in Memory)
+              </Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${colors.success}18`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexShrink: 0 }}>
+            <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+            <Text style={{ fontSize: 13, fontFamily: 'Sora-Bold', color: colors.success }}>
+              Active
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Kokoro Voice Model Selector Button */}
       {model.type === 'tts' && model.id.includes('kokoro') && (
         <TouchableOpacity
@@ -573,7 +618,7 @@ const ModelCard: React.FC<{
           onPress={onOpenVoiceModal}
           activeOpacity={0.7}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, marginRight: 8 }}>
             <View style={{
               width: 38,
               height: 38,
@@ -584,16 +629,16 @@ const ModelCard: React.FC<{
             }}>
               <Ionicons name="mic" size={20} color={colors.primary} />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 11, fontFamily: 'Sora-Bold', color: colors.primary, letterSpacing: 0.5 }}>
                 KOKORO VOICE MODEL
               </Text>
-              <Text style={{ fontSize: 14, fontFamily: 'Sora-Bold', color: colors.text, marginTop: 2 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Sora-Bold', color: colors.text, marginTop: 2 }} numberOfLines={1} ellipsizeMode="tail">
                 {getKokoroVoiceDisplayName(getKokoroVoiceById(modelStore.activeKokoroSpeakerId ?? 0))}
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${colors.primary}18`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${colors.primary}18`, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, flexShrink: 0 }}>
             <Text style={{ fontSize: 13, fontFamily: 'Sora-Bold', color: colors.primary }}>
               Change
             </Text>
@@ -723,19 +768,19 @@ const ModelCard: React.FC<{
               id: 1, 
               text: activeTab === 'llm' 
                 ? 'Download a model (Gemma 4 E2B or Phi-4 Mini recommended)' 
-                : 'Download the Kokoro-82M Voice model for offline speech' 
+                : 'Download a TTS voice model (Kokoro or Piper TTS) for offline speech' 
             },
             { 
               id: 2, 
               text: activeTab === 'llm'
                 ? 'Initialize the model once the download completes'
-                : 'Load the Voice engine to enable premium audio'
+                : 'Load the Voice engine to enable offline speech synthesis'
             },
             { 
               id: 3, 
               text: activeTab === 'llm'
                 ? 'Go to the Chat tab to start your conversation'
-                : 'Start a chat to hear the natural high-quality voice'
+                : 'Start a chat to hear the natural high-quality voice output'
             },
             { 
               id: 4, 

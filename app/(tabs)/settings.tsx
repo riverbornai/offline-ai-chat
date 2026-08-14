@@ -58,16 +58,20 @@ const SettingsScreen = observer(() => {
         style={[styles.item, { borderBottomColor: colors.border }]}
         activeOpacity={0.7}
       >
-        <View style={styles.itemLeft}>
+        <View style={styles.itemContent}>
           <View style={[styles.iconContainer, { backgroundColor: `${colors.primary}15` }]}>
             <Ionicons name={icon as any} size={20} color={colors.primary} />
           </View>
-          <Text style={[styles.itemLabel, { color: colors.text }]}>{label}</Text>
+          <View style={styles.textContainer}>
+            <Text style={[styles.itemLabel, { color: colors.text }]}>{label}</Text>
+            {value ? <Text style={[styles.itemValue, { color: colors.primary }]}>{value}</Text> : null}
+          </View>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={[styles.itemValue, { color: colors.muted }]}>{value}</Text>
-          {onPress && <Ionicons name="chevron-forward" size={16} color={colors.muted} />}
-        </View>
+        {onPress && (
+          <View style={styles.chevronContainer}>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </View>
+        )}
       </Container>
     );
   };
@@ -130,9 +134,12 @@ const SettingsScreen = observer(() => {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.primary }]}>SYSTEM SETUP</Text>
-          <TouchableOpacity onPress={handleResetOnboarding}>
-            <SettingItem icon="refresh-circle" label="Reset & Rerun Onboarding" value="Reset" />
-          </TouchableOpacity>
+          <SettingItem 
+            icon="refresh-circle" 
+            label="Reset & Rerun Onboarding" 
+            value="Reset" 
+            onPress={handleResetOnboarding} 
+          />
         </View>
         
         <View style={styles.footer}>
@@ -180,28 +187,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  itemLeft: {
+  itemContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+    flex: 1,
+    marginRight: 12,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   itemLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Sora-Bold',
   },
   itemValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Sora-Medium',
+    marginTop: 3,
+    opacity: 0.9,
+  },
+  chevronContainer: {
+    paddingLeft: 4,
   },
   footer: {
       padding: 40,

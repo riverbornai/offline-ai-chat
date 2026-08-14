@@ -1,9 +1,10 @@
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Platform,
   StyleSheet,
   Text,
@@ -17,6 +18,77 @@ import { RealtimeTranscriptionResult, whisperService } from '../services/whisper
 import { ttsService } from '../services/ttsService';
 import { useStores } from './StoreProvider';
 import { cleanTranscript } from '../utils/chat';
+
+// Single animated bar for speech waveform visualizer
+const VoiceWaveBar: React.FC<{ delay: number; color: string }> = ({ delay, color }) => {
+  const anim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 320 + delay, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.25, duration: 320 + delay, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [delay]);
+
+  return (
+    <Animated.View
+      style={{
+        width: 3.5,
+        height: 16,
+        borderRadius: 2,
+        backgroundColor: color,
+        transform: [{ scaleY: anim }],
+        marginHorizontal: 1.5,
+      }}
+    />
+  );
+};
+
+// Waveform equalizer bars group
+const VoiceWaveEqualizer: React.FC<{ color: string }> = ({ color }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', height: 20, paddingHorizontal: 2 }}>
+    <VoiceWaveBar delay={0} color={color} />
+    <VoiceWaveBar delay={120} color={color} />
+    <VoiceWaveBar delay={240} color={color} />
+    <VoiceWaveBar delay={80} color={color} />
+    <VoiceWaveBar delay={180} color={color} />
+  </View>
+);
+
+// Pulsing ring around the recording button
+const PulseMicRing: React.FC<{ color: string }> = ({ color }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.timing(scale, { toValue: 1.7, duration: 1100, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 1100, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        position: 'absolute',
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: color,
+        transform: [{ scale }],
+        opacity,
+      }}
+    />
+  );
+};
 
 interface RealtimeChatInputProps {
   onSendMessage: (text: string) => void;
@@ -92,6 +164,22 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
   }, []);
 
   React.useEffect(() => {
+    if (!isLoading) {
+      setIsTranscribing(false);
+    }
+  }, [isLoading]);
+
+  // Safety fallback to prevent isTranscribing from ever getting stuck permanently
+  React.useEffect(() => {
+    if (isTranscribing) {
+      const timer = setTimeout(() => {
+        setIsTranscribing(false);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isTranscribing]);
+
+  React.useEffect(() => {
     const initWhisper = async () => {
       try {
         if (whisperService.isWhisperAvailable() && !whisperService.isModelLoaded()) {
@@ -119,6 +207,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
     textInputRef.current?.blur();
     setTextInput('');
     setIsRecording(true);
+    setIsTranscribing(false);
     setTranscription('');
     recording.current = true;
     messageSent.current = false;
@@ -151,17 +240,21 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
             if (result.isFinal && cleaned && !messageSent.current) {
               messageSent.current = true;
               chatSessionStore.clearTranscriptionMessage();
-              onSendMessage(cleaned);
-              setTranscription('');
               recording.current = false;
+              setIsRecording(false);
+              setIsTranscribing(false);
+              setTranscription('');
+              onSendMessage(cleaned);
             }
           },
           onError: (error: Error) => {
             console.error('Realtime transcription error:', error);
             whisperService.resetRealtimeState && whisperService.resetRealtimeState();
+            setIsTranscribing(false);
           },
           onComplete: (finalResult) => {
             console.log('Realtime transcription completed:', finalResult);
+            setIsTranscribing(false);
           },
         });
       } catch (error) {
@@ -202,6 +295,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
       console.error('Error starting recording:', error);
       Alert.alert('Recording Error', 'Failed to start audio recording.');
       setIsRecording(false);
+      setIsTranscribing(false);
       recording.current = false;
     }
   };
@@ -210,6 +304,7 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
     if (!recording.current) return;
     setIsRecording(false);
     recording.current = false;
+    setIsTranscribing(true);
     if (audioInterval.current) {
       clearInterval(audioInterval.current);
       audioInterval.current = null;
@@ -223,13 +318,15 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
       if (!audioFile) throw new Error('No audio file URI available');
       try {
         await whisperService.stopRealtimeTranscription();
-        await new Promise((res) => setTimeout(res, 200));
+        await new Promise((res) => setTimeout(res, 150));
       } catch (error) {
         console.log('Real-time transcription was not active:', error);
       }
     } catch (error) {
       console.error('Error stopping recording:', error);
       Alert.alert('Recording Error', 'Failed to stop audio recording.');
+    } finally {
+      setIsTranscribing(false);
     }
   };
 
@@ -241,23 +338,27 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
       {/* Top divider line */}
       <View style={[styles.topDivider, { backgroundColor: colors.border }]} />
 
-      {/* Status banner */}
-      {(isRecording || isTranscribing || isLoading) && (
-        <View style={[styles.statusRow, { backgroundColor: isRecording ? `${colors.error}12` : `${colors.primary}10` }]}>
+      {/* Status banner for voice recording and transcription */}
+      {(isRecording || isTranscribing) && (
+        <View
+          style={[
+            styles.statusRow,
+            {
+              backgroundColor: isRecording ? `${colors.error}14` : `${colors.primary}12`,
+              borderColor: isRecording ? `${colors.error}35` : `${colors.primary}30`,
+              borderWidth: 1,
+            },
+          ]}
+        >
           {isRecording ? (
             <View style={styles.statusInner}>
-              <View style={[styles.pulseDot, { backgroundColor: colors.error }]} />
-              <Text style={[styles.statusText, { color: colors.error }]}>Listening — tap ■ to stop</Text>
-            </View>
-          ) : isTranscribing ? (
-            <View style={styles.statusInner}>
-              <ActivityIndicator color={colors.primary} size="small" />
-              <Text style={[styles.statusText, { color: colors.primary }]}>Processing voice...</Text>
+              <VoiceWaveEqualizer color={colors.error} />
+              <Text style={[styles.statusText, { color: colors.error }]}>Listening… speak clearly or tap ■</Text>
             </View>
           ) : (
             <View style={styles.statusInner}>
               <ActivityIndicator color={colors.primary} size="small" />
-              <Text style={[styles.statusText, { color: colors.primary }]}>AI is composing...</Text>
+              <Text style={[styles.statusText, { color: colors.primary }]}>Processing voice input…</Text>
             </View>
           )}
         </View>
@@ -288,9 +389,9 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
             style={[
               styles.textInputWrapper,
               {
-                backgroundColor: colors.surfaceMuted ?? colors.background ?? '#f4f7f4',
-                borderColor: isRecording ? colors.error : colors.border,
-                shadowColor: colors.shadow ?? '#000',
+                backgroundColor: isRecording ? `${colors.error}08` : (colors.surfaceMuted ?? colors.background ?? '#f4f7f4'),
+                borderColor: isRecording ? colors.error : isTranscribing ? colors.primary : colors.border,
+                shadowColor: isRecording ? colors.error : (colors.shadow ?? '#000'),
               },
             ]}
           >
@@ -329,26 +430,29 @@ const RealtimeChatInput: React.FC<RealtimeChatInputProps> = ({
 
         {/* Mic / Stop button */}
         {(!hasText || isRecording || !isModelLoaded) && (
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              styles.micButton,
-              {
-                backgroundColor: isRecording ? colors.error : colors.primary,
-                shadowColor: isRecording ? colors.error : colors.primary,
-              },
-              isBusy && !isRecording && isModelLoaded && styles.disabledButton,
-            ]}
-            onPress={!isModelLoaded ? onModelNotLoadedPress : isRecording ? stopRecording : startRecording}
-            disabled={isBusy && !isRecording && isModelLoaded}
-            activeOpacity={0.75}
-          >
-            <Ionicons
-              name={isRecording ? 'stop' : 'mic'}
-              size={isRecording ? 20 : 22}
-              color={isRecording ? '#fff' : (colors.onPrimary ?? '#fff')}
-            />
-          </TouchableOpacity>
+          <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+            {isRecording && <PulseMicRing color={colors.error} />}
+            <TouchableOpacity
+              style={[
+                styles.actionButton,
+                styles.micButton,
+                {
+                  backgroundColor: isRecording ? colors.error : colors.primary,
+                  shadowColor: isRecording ? colors.error : colors.primary,
+                },
+                isBusy && !isRecording && isModelLoaded && styles.disabledButton,
+              ]}
+              onPress={!isModelLoaded ? onModelNotLoadedPress : isRecording ? stopRecording : startRecording}
+              disabled={isBusy && !isRecording && isModelLoaded}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={isRecording ? 'stop' : 'mic'}
+                size={isRecording ? 20 : 22}
+                color={isRecording ? '#fff' : (colors.onPrimary ?? '#fff')}
+              />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </View>
