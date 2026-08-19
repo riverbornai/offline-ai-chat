@@ -57,6 +57,15 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
     isLocal: false,
     expectedSize: 1.40 * 1024 * 1024 * 1024
   },
+  'gemma-2b-it-q4_k_m': {
+    filename: 'gemma-2b-it.Q4_K_M.gguf',
+    displayName: 'Gemma 2B IT Q4_K_M (1.63GB)',
+    isLocal: false,
+    // Exact LFS byte size from HF. Was wrongly computed before as 1.63 * 1024^3,
+    // ~120MB too high — bigger than the 50MB TOLERANCE in isModelFullyDownloaded,
+    // so a fully-downloaded, working model still showed "Retry Download" in the UI.
+    expectedSize: 1630263776 // gemma-2b-it.Q4_K_M.gguf (verified via HF LFS metadata)
+  },
   'vits-piper-en_US-amy-low': {
     filename: 'en_US-amy-low.onnx',
     additionalFiles: ['en_US-amy-low-tokens.txt', 'espeak-ng-data.zip'],

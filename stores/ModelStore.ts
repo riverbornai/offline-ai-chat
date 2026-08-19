@@ -62,6 +62,44 @@ const CHAT_TEMPLATE_OVERRIDES: Record<string, string> = {
     "{% endfor %}",
 };
 
+// Models whose real chat template has no 'system' role at all. Gemma's
+// official template literally does `{% if messages[0]['role'] == 'system' %}
+// raise_exception('System role not supported') {% endif %}` (and, since a
+// dropped/misaligned system turn desyncs the user/assistant loop.index
+// parity check right after it, the error minja/llama.rn actually surfaces
+// can instead read "Conversation roles must alternate user/assistant/...").
+// Google's own guidance is to fold system instructions into the first user
+// turn instead — see mergeSystemIntoFirstUserTurn below.
+const NO_SYSTEM_ROLE_MODEL_SUBSTRINGS = ['gemma'];
+
+function mergeSystemIntoFirstUserTurn(
+  messages: ChatCompletionMessage[],
+  activeModelId?: string
+): ChatCompletionMessage[] {
+  const modelId = (activeModelId || '').toLowerCase();
+  const needsMerge = NO_SYSTEM_ROLE_MODEL_SUBSTRINGS.some(s => modelId.includes(s));
+  if (!needsMerge) return messages;
+
+  const sysIndex = messages.findIndex(m => m.role === 'system');
+  if (sysIndex === -1) return messages;
+
+  const systemContent = messages[sysIndex].content;
+  const rest = messages.filter((_, i) => i !== sysIndex);
+  const firstUserIndex = rest.findIndex(m => m.role === 'user');
+
+  if (firstUserIndex === -1) {
+    // No user turn to merge into (shouldn't normally happen) — just drop the
+    // system message rather than send a role the template will reject.
+    return rest;
+  }
+
+  rest[firstUserIndex] = {
+    ...rest[firstUserIndex],
+    content: `${systemContent}\n\n${rest[firstUserIndex].content}`,
+  };
+  return rest;
+}
+
 class ModelStore {
   models: AppModel[] = [
     {
@@ -131,6 +169,17 @@ class ModelStore {
       languageSupport: ['English']
     },
     {
+      id: 'gemma-2b-it-q4_k_m',
+      name: 'Gemma 2B IT Q4_K_M',
+      path: 'model/gemma-2b-it.Q4_K_M.gguf',
+      type: 'llm',
+      isDownloaded: false,
+      isLoading: false,
+      size: '1.63GB',
+      description: 'Google Gemma 2B instruction-tuned model - compact, fast general-purpose chat model.',
+      languageSupport: ['English']
+    },
+    {
       id: 'vits-piper-en_US-amy-low',
       name: 'Amy (Piper TTS)',
       path: 'en_US-amy-low.onnx',
@@ -178,10 +227,26 @@ class ModelStore {
   // max_tokens.
   defaultCompletionParams: CompletionParams = {
     temperature: 0.7,
-    max_tokens: 100,
+    // Lowered from 100 -> 60: decode time scales ~linearly with token count on
+    // CPU-only mobile inference, so this is a direct, guaranteed cut to
+    // worst-case latency (when a response doesn't hit its stop token early).
+    max_tokens: 60,
     top_p: 0.9,
     top_k: 40,
-    stop: ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>', '<end_of_turn>']
+    // <|im_start|>/<|im_end|> (ChatML) added as a safety net: when a GGUF has
+    // no embedded chat_template, llama.rn's jinja fallback renders a generic
+    // ChatML-style prompt. If the model was never trained on those markers
+    // (e.g. a base, non-instruct model) it just imitates them as plain text
+    // instead of treating them as turn boundaries, so generation never stops
+    // naturally and runs to max_tokens while hallucinating extra turns.
+    // Having them in `stop` at least cuts the runaway loop short.
+    //
+    // '<eos>' is Gemma's actual end-of-sequence token text (distinct from
+    // '<end_of_turn>', which only marks turn boundaries inside multi-turn
+    // chat) — without it in `stop`, the model emits the literal "<eos>" text
+    // before generation halts, so every Gemma reply ends with a visible
+    // "<eos>" tacked on.
+    stop: ['</s>', '<|end|>', '<|eot_id|>', '<|end_of_text|>', '<end_of_turn>', '<|im_end|>', '<|im_start|>', '<eos>']
   };
 
   constructor() {
@@ -309,6 +374,17 @@ class ModelStore {
         isLoading: false,
         size: '1.40GB',
         description: 'Ultra-compressed Microsoft Phi-4 Mini - Optimized for low-memory devices while maintaining high reasoning capabilities.',
+        languageSupport: ['English']
+      },
+      {
+        id: 'gemma-2b-it-q4_k_m',
+        name: 'Gemma 2B IT Q4_K_M',
+        path: 'model/gemma-2b-it.Q4_K_M.gguf',
+        type: 'llm',
+        isDownloaded: false,
+        isLoading: false,
+        size: '1.63GB',
+        description: 'Google Gemma 2B instruction-tuned model - compact, fast general-purpose chat model.',
         languageSupport: ['English']
       },
       {
@@ -520,7 +596,18 @@ class ModelStore {
       // every message even though the model itself is tiny.
       const isLightQuantized = model.id.includes('iq2') || model.id.includes('iq3');
       const isLargeModel = (model.id.includes('gemma-4') || model.id.includes('phi-4')) && !isLightQuantized;
-      const finalCtx = isLargeModel ? Math.min(this.n_context, 512) : this.n_context;
+      // TinyLlama (1.1B) is cheap enough that a bigger context barely costs
+      // anything, so it keeps the full platform n_context. Every other
+      // non-"large" model here is a ~3.8B model (Phi-3 Mini, Phi-4 Mini
+      // Light/IQ2) where prefill+decode cost is dominated by context size on
+      // an 8GB-RAM phone, so cap it to 768 to cut latency without touching
+      // the already-tuned 512 cap on the true large models (Gemma-4/Phi-4 full).
+      const isTinyModel = model.id.includes('tinyllama');
+      const finalCtx = isLargeModel
+        ? Math.min(this.n_context, 512)
+        : isTinyModel
+          ? this.n_context
+          : Math.min(this.n_context, 768);
       const finalBatch = isLargeModel ? Math.min(this.n_batch, 128) : this.n_batch;
       const useMlock = Platform.OS === 'android' ? false : (isLargeModel ? false : true); // Disable mlock for all models on Android and large models on other platforms to prevent OOM
       
@@ -678,11 +765,15 @@ class ModelStore {
           )?.[1]
         : undefined;
 
+      const chatMessages = usingChatMessages
+        ? mergeSystemIntoFirstUserTurn(input as ChatCompletionMessage[], this.activeModelId)
+        : undefined;
+
       // Ensure all parameters are plain objects, not MobX observables
       const completionOptions = {
         ...(usingChatMessages
           ? {
-              messages: input as ChatCompletionMessage[],
+              messages: chatMessages!,
               jinja: true,
               ...(templateOverride ? { chat_template: templateOverride } : {}),
             }

@@ -19,6 +19,7 @@ import { useStores } from '../components/StoreProvider';
 import { ttsService } from '../services/ttsService';
 import { whisperService } from '../services/whisperService';
 import { ConversationPromptBuilder, cleanTranscript } from '../utils/chat';
+import ChatHistoryDrawer from '../components/ChatHistoryDrawer';
 
 const { width, height } = Dimensions.get('window');
 
@@ -119,6 +120,7 @@ const TalkScreen: React.FC = observer(() => {
   const [transcript, setTranscript] = useState('');
   const [assistantText, setAssistantText] = useState('');
   const [autoResume, setAutoResume] = useState(false); // Fix 1: state not ref
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const ttsRef = useRef('');
   const ttsQueue = useRef<string[]>([]);
@@ -148,6 +150,44 @@ const TalkScreen: React.FC = observer(() => {
     return false;
   };
 
+  // ── New Chat handler ─────────────────────────────────────────────────────────
+  const handleNewChat = useCallback(async () => {
+    // Stop any active audio
+    shouldAutoResumeRef.current = false;
+    setAutoResume(false);
+    try {
+      await ttsService.stop();
+      await whisperService.stopRealtimeTranscription();
+    } catch (_) {}
+    ttsQueue.current = [];
+    ttsSpeakingRef.current = false;
+    isProcessingRef.current = false;
+    generationActiveRef.current = false;
+    setState('idle');
+    setTranscript('');
+    setAssistantText('');
+    chatSessionStore.createConversationSession('New Chat');
+  }, [chatSessionStore]);
+
+  // ── Switch to existing session ────────────────────────────────────────────────
+  const handleSelectSession = useCallback(async (sessionId: string) => {
+    shouldAutoResumeRef.current = false;
+    setAutoResume(false);
+    try {
+      await ttsService.stop();
+      await whisperService.stopRealtimeTranscription();
+    } catch (_) {}
+    ttsQueue.current = [];
+    ttsSpeakingRef.current = false;
+    isProcessingRef.current = false;
+    generationActiveRef.current = false;
+    setState('idle');
+    setTranscript('');
+    setAssistantText('');
+    chatSessionStore.setActiveSession(sessionId);
+  }, [chatSessionStore]);
+
+  // Ensure a session always exists on mount
   useEffect(() => {
     let mounted = true;
     if (!chatSessionStore.activeSession) {
@@ -170,6 +210,19 @@ const TalkScreen: React.FC = observer(() => {
       ttsService.stop().catch(console.error);
     };
   }, []);
+
+  // Re-create a session whenever the active session disappears (e.g. after
+  // the user clears all chat data from settings). Without this, the store has
+  // no activeSession and addMessage/updateMessage silently no-op, so messages
+  // are processed (and TTS plays) but nothing appears on screen.
+  useEffect(() => {
+    if (!chatSessionStore.activeSession) {
+      chatSessionStore.createConversationSession('Voice Assistant');
+      // Also reset local display state so the UI doesn't show stale text
+      setTranscript('');
+      setAssistantText('');
+    }
+  }, [chatSessionStore.activeSession]);
 
   // Mic pulse animation
   useEffect(() => {
@@ -226,9 +279,13 @@ const TalkScreen: React.FC = observer(() => {
     }
     isProcessingRef.current = true;
     generationActiveRef.current = true;
+    // Always update local UI state immediately so the user sees their words
     setTranscript(cleaned);
     setState('processing');
 
+    // Guard: ensure an active session exists before writing any messages.
+    // This can happen after the user clears chat history — the store sets
+    // activeSessionId to null, which causes addMessage to silently no-op.
     if (!chatSessionStore.activeSession) {
       chatSessionStore.createConversationSession('Voice Assistant');
     }
@@ -241,6 +298,7 @@ const TalkScreen: React.FC = observer(() => {
       const messages = promptBuilder.buildMessages(cleaned, chatSessionStore.currentMessages);
       let assistantMessage = chatSessionStore.addMessage({ text: '', author: 'assistant', type: 'conversation' });
       if (!assistantMessage) {
+        // Session was somehow lost between the guard above and here; recreate it.
         chatSessionStore.createConversationSession('Voice Assistant');
         assistantMessage = chatSessionStore.addMessage({ text: '', author: 'assistant', type: 'conversation' });
       }
@@ -444,19 +502,31 @@ const TalkScreen: React.FC = observer(() => {
   const noModel = !modelStore.context;
 
   return (
+    <View style={{ flex: 1 }}>
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        {/* Left: Hamburger + title */}
         <View style={styles.headerLeft}>
+          <TouchableOpacity
+            onPress={() => setIsDrawerOpen(true)}
+            style={[styles.hamburgerBtn, { backgroundColor: `${colors.primary}12` }]}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="menu" size={20} color={colors.primary} />
+          </TouchableOpacity>
           <View style={[styles.headerIcon, { backgroundColor: `${colors.primary}18` }]}>
             <Ionicons name="mic" size={18} color={colors.primary} />
           </View>
           <View>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Voice Assistant</Text>
-            <Text style={[styles.headerSub, { color: colors.muted }]}>Hands-free conversation</Text>
+            <Text style={[styles.headerSub, { color: colors.muted }]} numberOfLines={1}>
+              {chatSessionStore.activeSession?.title ?? 'Hands-free conversation'}
+            </Text>
           </View>
         </View>
-        {/* Auto-resume toggle pill */}
+
+        {/* Right: Auto-resume pill */}
         <TouchableOpacity
           style={[
             styles.resumePill,
@@ -586,6 +656,18 @@ const TalkScreen: React.FC = observer(() => {
         <Text style={[styles.stateDesc, { color: colors.muted }]}>{cfg.desc}</Text>
       </View>
     </SafeAreaView>
+
+    {/* Chat History Drawer — rendered above SafeAreaView so it covers the full screen */}
+    <ChatHistoryDrawer
+      isOpen={isDrawerOpen}
+      sessions={chatSessionStore.sessions.slice()}
+      activeSessionId={chatSessionStore.activeSessionId}
+      onClose={() => setIsDrawerOpen(false)}
+      onSelectSession={handleSelectSession}
+      onNewChat={handleNewChat}
+      onDeleteSession={(id) => chatSessionStore.deleteSession(id)}
+    />
+    </View>
   );
 });
 
@@ -601,11 +683,12 @@ const styles = StyleSheet.create({
   retryText: { color: '#fff', fontFamily: 'Sora-Bold', fontSize: 15 },
 
   // Header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontFamily: 'Sora-Bold', letterSpacing: -0.3 },
-  headerSub: { fontSize: 11, fontFamily: 'Sora-Medium', opacity: 0.65, marginTop: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, overflow: 'hidden' },
+  hamburgerBtn: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  headerIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 15, fontFamily: 'Sora-Bold', letterSpacing: -0.3 },
+  headerSub: { fontSize: 10, fontFamily: 'Sora-Medium', opacity: 0.65, marginTop: 1, maxWidth: 140 },
   resumePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   resumeText: { fontSize: 11, fontFamily: 'Sora-Bold' },
 

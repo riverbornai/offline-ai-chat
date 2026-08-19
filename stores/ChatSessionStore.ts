@@ -42,16 +42,31 @@ const LEGACY_DEFAULT_SYSTEM_PROMPTS = [
   'emails or letters, and never sign off with things like "Your Name" or "Your Company" — you ' +
   'have no company and are not representing a business unless the user explicitly says you are. ' +
   'Stay on the exact topic asked. Keep answers concise and natural.',
+  'You are a helpful assistant. Reply to the user directly and briefly. ' +
+  'Only answer the message you were just given. Do not invent example ' +
+  'conversations, Q&A lists, or additional users and replies.',
 ];
 
 // Kept intentionally short and plain. Small on-device models (1-2B params,
-// like TinyLlama) don't reliably treat a long, descriptive system prompt as
-// behavior rules — they tend to riff on it as *content* instead (e.g. seeing
-// words like "offline" and "assistant" and generating a fake Q&A transcript
-// about being an offline assistant, rather than actually being one). Short,
-// direct, imperative sentences hold up much better at this model size.
+// like TinyLlama, Gemma 2B) don't reliably treat a long, descriptive system
+// prompt as behavior rules — they tend to riff on it as *content* instead
+// (e.g. seeing words like "offline" and "assistant" and generating a fake
+// Q&A transcript about being an offline assistant, rather than actually
+// being one). Short, direct, imperative sentences hold up much better at
+// this model size.
+//
+// The "answer general knowledge questions directly" line was added because
+// small instruct-tuned models (observed on Gemma 2B IT) over-generalize
+// their "don't hallucinate current events" safety training into refusing
+// ANY question phrased like "Do you know about X?" — including plain,
+// static, non-current-events topics like "JavaScript" — with a canned "I
+// don't have access to external sources" non-answer. This won't fully fix
+// a small model's shaky knowledge recall, but it measurably cuts down on
+// that specific reflexive-refusal pattern.
 const DEFAULT_SYSTEM_PROMPT =
   'You are a helpful assistant. Reply to the user directly and briefly. ' +
+  'Answer general knowledge questions directly using what you already know. ' +
+  'Do not say you lack access to external sources or the internet — just answer. ' +
   'Only answer the message you were just given. Do not invent example ' +
   'conversations, Q&A lists, or additional users and replies.';
 
