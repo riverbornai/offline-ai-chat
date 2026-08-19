@@ -28,6 +28,7 @@ const MODEL_DOWNLOAD_URLS: { [key: string]: string } = {
   'google_gemma-4-E4B-it-Q4_K_M.gguf': 'https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf',
   'Phi-4-mini-instruct-Q4_K_M.gguf': 'https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf',
   'phi-4-mini-iq2_m.gguf': 'https://huggingface.co/Mungert/Phi-4-mini-instruct.gguf/resolve/main/phi-4-mini-iq2_m.gguf',
+  'gemma-2b-it.Q4_K_M.gguf': 'https://huggingface.co/mradermacher/gemma-2b-it-GGUF/resolve/main/gemma-2b-it.Q4_K_M.gguf',
   'en_US-amy-low.onnx': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/en_US-amy-low.onnx?download=true',
   'en_US-amy-low-tokens.txt': 'https://huggingface.co/csukuangfj/vits-piper-en_US-amy-low/resolve/main/tokens.txt?download=true',
   'espeak-ng-data.zip': 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/espeak-ng-data.tar.bz2',

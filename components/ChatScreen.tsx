@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { observer } from 'mobx-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -22,6 +23,7 @@ import { useStores } from './StoreProvider';
 import { ttsService } from '../services/ttsService';
 import { ConversationPromptBuilder } from '../utils/chat';
 import ChatHeader from './ChatHeader';
+import ChatHistoryDrawer from './ChatHistoryDrawer';
 import MessageBubble from './MessageBubble';
 import RealtimeChatInput from './RealtimeChatInput';
 
@@ -78,6 +80,11 @@ const cleanLLMResponse = (response: string): string => {
     .replace(/<\|user\|>/g, '')
     .replace(/<\|system\|>/g, '')
     .replace(/<\|endoftext\|>/g, '')
+    // Safety net for Gemma's <eos> / <end_of_turn> special tokens: `stop` in
+    // ModelStore should catch these mid-stream, but strip them here too in
+    // case a token straddles a stream chunk boundary and slips through.
+    .replace(/<eos>/g, '')
+    .replace(/<end_of_turn>/g, '')
     .replace(/^---+$/gm, '')
     .replace(/^(Instruction|Inst)\s*$/gm, '')
     .replace(/\n\s*\n\s*\n/g, '\n\n')
@@ -97,13 +104,9 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const isSpeakingRef = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
-
-  // Streaming TTS refs (same pattern as TalkScreen)
-  const ttsRef = useRef('');
-  const ttsQueue = useRef<string[]>([]);
-  const ttsSpeakingRef = useRef(false);
   const generationActiveRef = useRef(false);
 
   // Keep ref in sync with state
@@ -111,6 +114,24 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     isSpeakingRef.current = val;
     setIsSpeaking(val);
   };
+
+  // ── New Chat handler ──────────────────────────────────────────────────
+  const handleNewChat = useCallback(() => {
+    generationActiveRef.current = false;
+    ttsService.stop().catch(console.warn);
+    setIsSpeakingBoth(false);
+    setIsLoading(false);
+    chatSessionStore.createConversationSession('New Chat');
+  }, [chatSessionStore]);
+
+  // ── Switch session ─────────────────────────────────────────────────────
+  const handleSelectSession = useCallback((id: string) => {
+    generationActiveRef.current = false;
+    ttsService.stop().catch(console.warn);
+    setIsSpeakingBoth(false);
+    setIsLoading(false);
+    chatSessionStore.setActiveSession(id);
+  }, [chatSessionStore]);
 
   useEffect(() => {
     if (sessionId) {
@@ -138,39 +159,27 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     }
   }, [isLoading, lastMessageText]);
 
-  // Speak sentences from the queue one by one (streaming TTS)
-  const speakNextSentence = async () => {
-    if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
-      const sentence = ttsQueue.current.shift()!;
-      ttsSpeakingRef.current = true;
-      setIsSpeakingBoth(true);
-      try {
-        await ttsService.speak(sentence);
-      } catch (err) {
-        console.warn('[ChatScreen] TTS chunk error:', err);
-      } finally {
-        ttsSpeakingRef.current = false;
-        if (ttsQueue.current.length > 0) {
-          speakNextSentence();
-        } else if (!generationActiveRef.current) {
-          // Generation already finished and queue is now empty
-          setIsSpeakingBoth(false);
-        }
-      }
-    }
-  };
+  // When keyboard opens, scroll to bottom so latest message stays visible
+  useEffect(() => {
+    const sub = Keyboard.addListener('keyboardDidShow', () => {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    return () => sub.remove();
+  }, []);
+
 
   const handleSendMessage = async (text: string) => {
-    // Stop any in-progress TTS before new message
-    if (isSpeakingRef.current || ttsSpeakingRef.current) {
-      generationActiveRef.current = false;
-      ttsQueue.current = [];
-      ttsSpeakingRef.current = false;
-      await ttsService.stop().catch(console.warn);
-      setIsSpeakingBoth(false);
-    }
     let cleaned = text.trim().replace(/\[BLANK_AUDIO\]/g, '').trim();
     if (!cleaned || isLoading) return;
+
+    // If all sessions were deleted, create a new one so addMessage/updateMessage
+    // don't silently return (they bail out when activeSession is null).
+    if (!chatSessionStore.activeSession) {
+      chatSessionStore.createConversationSession('New Chat');
+    }
+
     if (!modelStore.context) {
       const hasDownloadedModel = modelStore.availableModels.length > 0;
       const errorMessage = hasDownloadedModel
@@ -183,10 +192,16 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       });
       return;
     }
-    const lastMsg = chatSessionStore.currentMessages[chatSessionStore.currentMessages.length - 1];
-    if (lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === cleaned && lastMsg.type === 'transcription') {
+    const historyBeforeThisTurn = chatSessionStore.currentMessages.slice();
+    const lastMsg = historyBeforeThisTurn[historyBeforeThisTurn.length - 1];
+    // True whenever the store's last message already IS this turn's user text
+    // (either a live transcription bubble being finalized, or a resend the
+    // dedup guard below intentionally skips re-adding).
+    const currentTurnAlreadyInHistory =
+      !!lastMsg && lastMsg.author === 'user' && lastMsg.text.trim() === cleaned;
+    if (currentTurnAlreadyInHistory && lastMsg.type === 'transcription') {
       chatSessionStore.updateMessageType(lastMsg.id, 'conversation');
-    } else if (!lastMsg || lastMsg.author !== 'user' || lastMsg.text.trim() !== cleaned) {
+    } else if (!currentTurnAlreadyInHistory) {
       chatSessionStore.addMessage({
         text: cleaned,
         author: 'user',
@@ -196,10 +211,6 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
     setIsLoading(true);
     chatSessionStore.setIsGenerating(true);
 
-    // Reset streaming TTS state
-    ttsRef.current = '';
-    ttsQueue.current = [];
-    ttsSpeakingRef.current = false;
     generationActiveRef.current = true;
 
     let accumulatedResponse = '';
@@ -208,7 +219,17 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
       const promptBuilder = new ConversationPromptBuilder(
         chatSessionStore.settings.systemPrompt
       );
-      const messages = promptBuilder.buildMessages(cleaned, chatSessionStore.currentMessages);
+      // buildMessages() appends `cleaned` itself as the final user turn, so the
+      // history passed in here must NOT already end with that same message —
+      // otherwise the prompt gets two consecutive 'user' turns (once from
+      // history, once from buildMessages). That silently degrades quality on
+      // templates that tolerate back-to-back user turns, and hard-fails
+      // ("Conversation roles must alternate...") on templates that enforce
+      // strict user/assistant alternation, like Gemma's.
+      const promptHistory = currentTurnAlreadyInHistory
+        ? historyBeforeThisTurn.slice(0, -1)
+        : historyBeforeThisTurn;
+      const messages = promptBuilder.buildMessages(cleaned, promptHistory);
       const assistantMessage = chatSessionStore.addMessage({
         text: '',
         author: 'assistant',
@@ -234,31 +255,11 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
             const cleanedResponse = cleanLLMResponse(accumulatedResponse);
             chatSessionStore.updateMessage(assistantMessage.id, cleanedResponse);
           }
-          // ── Streaming TTS: extract complete sentences as tokens arrive ──
-          ttsRef.current += token;
-          const sentenceRegex = /([^.?!]+[.?!]+["')\]]*\s*)/g;
-          let match;
-          let lastIndex = 0;
-          while ((match = sentenceRegex.exec(ttsRef.current)) !== null) {
-            const sentence = match[0].trim();
-            if (sentence && !/^[\s.,!?;:]+$/.test(sentence)) {
-              ttsQueue.current.push(sentence);
-              lastIndex = sentenceRegex.lastIndex;
-            }
-          }
-          if (lastIndex > 0) {
-            ttsRef.current = ttsRef.current.slice(lastIndex);
-            speakNextSentence();
-          }
+
         }
       );
 
-      // Flush any remaining text after generation finishes
-      const remaining = ttsRef.current.trim();
-      if (remaining && !/^[\s.,!?;:]+$/.test(remaining)) {
-        ttsQueue.current.push(remaining);
-      }
-      ttsRef.current = '';
+
 
       // Finalize the message text
       if (assistantMessage) {
@@ -277,13 +278,8 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         }
       }
 
-      // Kick off TTS for any remaining queued sentences
       generationActiveRef.current = false;
-      if (ttsQueue.current.length > 0 && !ttsSpeakingRef.current) {
-        speakNextSentence();
-      } else if (!ttsSpeakingRef.current) {
-        setIsSpeakingBoth(false);
-      }
+      setIsSpeakingBoth(false);
     } catch (error) {
       generationActiveRef.current = false;
       chatSessionStore.addMessage({
@@ -357,27 +353,31 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
 
 
   return (
+    <View style={{ flex: 1 }}>
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
         <ChatHeader
           session={chatSessionStore.activeSession}
           colors={colors}
           modelReady={!!modelStore.context}
+          isContextLoading={modelStore.isContextLoading}
           isSpeaking={isSpeaking}
           onStopTTS={() => {
             ttsService.stop().catch(console.warn);
             setIsSpeakingBoth(false);
           }}
+          onOpenDrawer={() => setIsDrawerOpen(true)}
         />
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {chatSessionStore.currentMessages.length === 0 && renderWelcomeMessage()}
           {chatSessionStore.currentMessages.map((message, index) => {
@@ -414,6 +414,18 @@ const ChatScreen: React.FC<ChatScreenProps> = observer(({ sessionId, topic }) =>
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
+
+    {/* Chat History Drawer - overlays full screen */}
+    <ChatHistoryDrawer
+      isOpen={isDrawerOpen}
+      sessions={chatSessionStore.sessions.slice()}
+      activeSessionId={chatSessionStore.activeSessionId}
+      onClose={() => setIsDrawerOpen(false)}
+      onSelectSession={handleSelectSession}
+      onNewChat={handleNewChat}
+      onDeleteSession={(id) => chatSessionStore.deleteSession(id)}
+    />
+    </View>
   );
 });
 

@@ -200,6 +200,20 @@ export class MessageFormatter {
       totalLength += content.length;
     }
 
+    // Real history always alternates starting with 'user'. slice(-maxMessages)
+    // above trims by a raw count, not by whole user/assistant pairs — with an
+    // odd maxMessages (3) against an even-length history, the window can land
+    // on [assistant, user, assistant], i.e. one orphaned assistant turn with
+    // no user turn before it. That silently corrupts the alternation parity:
+    // combined with the current user turn appended after this in
+    // buildMessages(), templates that enforce strict user/assistant
+    // alternation (Gemma's) hard-fail with "Conversation roles must
+    // alternate...". Drop any leading orphaned assistant turn so the window
+    // always starts on 'user'.
+    while (result.length > 0 && result[0].role === 'assistant') {
+      result.shift();
+    }
+
     return result;
   }
 

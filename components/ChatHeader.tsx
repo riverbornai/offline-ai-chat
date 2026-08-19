@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   Text,
   View,
   Platform,
-  Animated,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,79 +13,55 @@ interface ChatHeaderProps {
   session?: ChatSession;
   colors: any;
   modelReady?: boolean;
+  isContextLoading?: boolean;
   isSpeaking?: boolean;
   onStopTTS?: () => void;
+  onOpenDrawer?: () => void;
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   session,
   colors,
   modelReady = false,
+  isContextLoading = false,
   isSpeaking = false,
   onStopTTS,
+  onOpenDrawer,
 }) => {
-  const [isOnline, setIsOnline] = useState<boolean | null>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    let mounted = true;
-
-    const checkConnectivity = async () => {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        await fetch('https://1.1.1.1', { method: 'HEAD', signal: controller.signal });
-        clearTimeout(timeout);
-        if (mounted) setIsOnline(true);
-      } catch {
-        if (mounted) setIsOnline(false);
-      }
-    };
-
-    checkConnectivity();
-    const interval = setInterval(checkConnectivity, 8000);
-    return () => { mounted = false; clearInterval(interval); };
-  }, []);
-
-  // Pulse animation for offline dot
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-      ])
-    );
-    if (isOnline === false) {
-      pulse.start();
-    } else {
-      pulse.stop();
-      pulseAnim.setValue(1);
-    }
-    return () => pulse.stop();
-  }, [isOnline]);
-
-  // Status config
+  // Status based on model loading/readiness — no network check needed
+  // (this is an offline-first app; the model running locally is what matters)
   let statusColor: string;
   let statusLabel: string;
-  let statusIconName: any;
+  let statusIcon: any;
 
-  if (isOnline === false) {
-    statusColor = '#ef4444';
-    statusLabel = 'Offline';
-    statusIconName = 'cloud-offline-outline';
-  } else if (!modelReady) {
-    statusColor = '#f59e0b';
-    statusLabel = 'Load Model';
-    statusIconName = 'warning-outline';
-  } else {
+  if (isContextLoading) {
+    statusColor = '#9fcebe';  // riverMist — neutral
+    statusLabel = 'Loading...';
+    statusIcon  = 'hourglass-outline';
+  } else if (modelReady) {
     statusColor = '#10b981';
-    statusLabel = 'Online';
-    statusIconName = 'wifi';
+    statusLabel = 'Ready';
+    statusIcon  = 'checkmark-circle';
+  } else {
+    statusColor = '#f59e0b';
+    statusLabel = 'No Model';
+    statusIcon  = 'warning-outline';
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
       <View style={styles.headerRow}>
+
+        {/* Hamburger — open history drawer */}
+        <TouchableOpacity
+          onPress={onOpenDrawer}
+          style={[styles.sideBtn, { backgroundColor: `${colors.primary}12` }]}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="menu" size={20} color={colors.primary} />
+        </TouchableOpacity>
+
         {/* Avatar icon */}
         <View style={[styles.iconCircle, { backgroundColor: `${colors.primary}18` }]}>
           <Ionicons name="chatbubbles" size={20} color={colors.primary} />
@@ -107,14 +82,13 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           styles.statusBadge,
           { backgroundColor: `${statusColor}15`, borderColor: `${statusColor}40` }
         ]}>
-          <Animated.View
-            style={[styles.statusDot, { backgroundColor: statusColor, opacity: isOnline === false ? pulseAnim : 1 }]}
-          />
-          <Ionicons name={statusIconName} size={12} color={statusColor} />
+          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          <Ionicons name={statusIcon} size={12} color={statusColor} />
           <Text style={[styles.statusLabel, { color: statusColor }]}>
             {statusLabel}
           </Text>
         </View>
+
       </View>
     </View>
   );
@@ -122,9 +96,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingTop: Platform.OS === 'ios' ? 10 : 14,
-    paddingBottom: 14,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -136,7 +110,15 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+  },
+  sideBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   iconCircle: {
     width: 42,
