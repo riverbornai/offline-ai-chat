@@ -91,6 +91,7 @@ A fully **offline**, privacy-first AI chat mobile application built with **React
 | **Phi-4 Mini Instruct Q4_K_M** | 2.49 GB | Full Phi-4 Mini — math & reasoning specialist |
 | **Gemma 4 E2B (Small) IQ2_M** | 2.62 GB | Google Gemma multimodal, optimized small variant |
 | **Gemma 4 E4B IT Q4_K_M** | 5.41 GB | High-performance Google Gemma multimodal |
+| **Gemma 2B IT Q4_K_M** | 1.63 GB | Google Gemma 2B instruction-tuned, compact general-purpose chat model |
 
 ### Text-to-Speech Models (TTS)
 
