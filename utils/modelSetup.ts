@@ -69,9 +69,9 @@ export const AVAILABLE_MODELS: { [key: string]: AvailableModelConfig } = {
   'vits-piper-en_US-amy-low': {
     filename: 'en_US-amy-low.onnx',
     additionalFiles: ['en_US-amy-low-tokens.txt', 'espeak-ng-data.zip'],
-    displayName: 'Amy Low (Piper TTS) (28MB)',
+    displayName: 'Amy Low (Piper TTS) (63MB)',
     isLocal: true, // Mark as local if it's bundled
-    expectedSize: 28 * 1024 * 1024
+    expectedSize: 63 * 1024 * 1024
   },
   'kokoro-en-v0_19': {
     filename: 'kokoro-en-v0_19.onnx',

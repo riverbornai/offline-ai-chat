@@ -186,7 +186,7 @@ class ModelStore {
       type: 'tts',
       isDownloaded: false,
       isLoading: false,
-      size: '28MB',
+      size: '63MB',
       description: 'Natural sounding Piper TTS model (Amy Low)',
       languageSupport: ['English']
     },
@@ -394,7 +394,7 @@ class ModelStore {
         type: 'tts',
         isDownloaded: false,
         isLoading: false,
-        size: '28MB',
+        size: '63MB',
         description: 'Natural sounding Piper TTS model (Amy Low)',
         languageSupport: ['English']
       },
