@@ -1,5 +1,11 @@
 # 🤖 Offline General AI Chat
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-android%20%7C%20ios-lightgrey.svg)](https://github.com/riverbornai/offline-ai-chat)
+[![React Native](https://img.shields.io/badge/React%20Native-0.79-blue.svg)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-53-black.svg)](https://expo.dev/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 A fully **offline**, privacy-first AI chat mobile application built with **React Native (Expo)**. Run large language models directly on your device — no internet connection, no cloud, no data collection.
 
 ---
@@ -97,7 +103,7 @@ A fully **offline**, privacy-first AI chat mobile application built with **React
 
 | Model | Size | Languages |
 |---|---|---|
-| **Amy Low (Piper TTS)** | 28 MB | English |
+| **Amy Low (Piper TTS)** | 63 MB | English |
 | **Kokoro v1.1 Multi-lang** | 344 MB | EN, ZH, FR, DE, IT, JA, KO, PT, ES |
 
 ---

@@ -1,7 +1,31 @@
 {
-  "name": "ai-chat",
+  "name": "offline-ai-chat",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "description": "A fully offline, privacy-first AI chat mobile app built with React Native (Expo). Run LLMs, TTS, and STT entirely on-device — no internet, no cloud, no data collection.",
+  "author": "riverbornai",
+  "license": "MIT",
+  "private": false,
+  "homepage": "https://github.com/riverbornai/offline-ai-chat#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/riverbornai/offline-ai-chat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/riverbornai/offline-ai-chat/issues"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "llm",
+    "offline-ai",
+    "on-device-ai",
+    "llama",
+    "whisper",
+    "tts",
+    "privacy",
+    "mobile-ai"
+  ],
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -80,5 +104,4 @@
     "react-native-gradle-plugin": "^0.71.19",
     "typescript": "~5.8.3"
   },
-  "private": true
 }
