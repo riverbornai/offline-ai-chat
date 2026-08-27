@@ -12,7 +12,11 @@ A fully **offline**, privacy-first AI chat mobile application built with **React
 
 ## 🎬 Demo
 
-[![Watch Demo Video](https://img.shields.io/badge/▶_Watch_Demo_Video-Cloudflare_Stream-blue?style=for-the-badge&logo=cloudflare)](https://customer-g1l5mqr5i161230h.cloudflarestream.com/d168dbf5d6963e242bfb632cf9cb2bf0/watch)
+[![Watch Demo Video]
+
+https://github.com/user-attachments/assets/db5498c7-5852-4263-9c76-3574139922b9
+
+
 
 ---
 
