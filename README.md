@@ -12,9 +12,11 @@ A fully **offline**, privacy-first AI chat mobile application built with **React
 
 ## 🎬 Demo
 
-[![Watch Demo Video]
+Watch Demo Video
 
-https://github.com/user-attachments/assets/db5498c7-5852-4263-9c76-3574139922b9
+https://github.com/user-attachments/assets/6e553bc7-5bee-4931-86f3-6d6e8105cc10
+
+
 
 
 
