@@ -1,0 +1,56 @@
+diff --git a/node_modules/@dr.pogodin/react-native-fs/src/NativeReactNativeFs.ts b/node_modules/@dr.pogodin/react-native-fs/src/NativeReactNativeFs.ts
+index 6892f39..80390e9 100644
+--- a/node_modules/@dr.pogodin/react-native-fs/src/NativeReactNativeFs.ts
++++ b/node_modules/@dr.pogodin/react-native-fs/src/NativeReactNativeFs.ts
+@@ -1,8 +1,8 @@
+ import {
+-  type CodegenTypes,
+   type TurboModule,
+   TurboModuleRegistry,
+ } from 'react-native';
++import type {EventEmitter} from 'react-native/Libraries/Types/CodegenTypes';
+ 
+ // Note: It would be better to have all these type definitions in a dedicated
+ // module, however as of its current version RN's Codegen does not seem to handle
+@@ -299,15 +299,32 @@ export interface Spec extends TurboModule {
+     FileProtectionKeys?: FileProtectionKeysT;
+   };
+ 
+-  readonly onDownloadBegin: CodegenTypes.EventEmitter<DownloadBeginCallbackResultT>;
+-
+-  readonly onDownloadProgress: CodegenTypes.EventEmitter<DownloadProgressCallbackResultT>;
+-
+-  readonly onDownloadResumable: CodegenTypes.EventEmitter<DownloadResumableCallbackResultT>;
+-
+-  readonly onUploadBegin: CodegenTypes.EventEmitter<UploadBeginCallbackArgT>;
+-
+-  readonly onUploadProgress: CodegenTypes.EventEmitter<UploadProgressCallbackArgT>;
++  readonly onDownloadBegin: EventEmitter<{
++    jobId: number;
++    statusCode: number;
++    contentLength: number;
++    headers: StringMapT;
++  }>;
++
++  readonly onDownloadProgress: EventEmitter<{
++    jobId: number;
++    contentLength: number;
++    bytesWritten: number;
++  }>;
++
++  readonly onDownloadResumable: EventEmitter<{
++    jobId: number;
++  }>;
++
++  readonly onUploadBegin: EventEmitter<{
++    jobId: number;
++  }>;
++
++  readonly onUploadProgress: EventEmitter<{
++    jobId: number;
++    totalBytesExpectedToSend: number;
++    totalBytesSent: number;
++  }>;
+ 
+   // Common.
+   appendFile(path: string, b64: string): Promise<void>;
